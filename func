@@ -13,9 +13,11 @@ esac
 
 retrieve() {
 	SRCS=${1%% *}
+	WC=`echo "$1" | wc -w`
+	[ "$WC" -eq 2 ] && CERT=${1##* }
 	[ -f ../0sources/"$SRCS" ] &&\
 	cp -a ../0sources/${SRCS} . ||\
-	wget -t0 -c ${URL}/${SRCS}
+	wget -t0 -c ${URL}/${SRCS} $CERT
 	[ "$?" -eq 0 ] || exit 1
 	if [ "$DLD_ONLY" -eq 0 ];then
 		mv -f ${SRCS} ../0sources
