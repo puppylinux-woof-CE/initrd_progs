@@ -10,7 +10,7 @@ Usage
 -----
 Run `./build_all.sh` 
 
-- hopefully a uClibc build environment downloads and nev vars are set up from http://landley.net/aboriginal/
+- hopefully a uClibc build environment downloads and env vars are set up from http://landley.net/aboriginal/
 - musl libc http://www.musl-libc.org is REQUIRED as not everything builds with uClibc
 - you can do builds individually, if you can't figure it out, ask!
 
