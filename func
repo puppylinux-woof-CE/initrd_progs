@@ -1,0 +1,47 @@
+# functions library
+
+. ../build.conf
+echo
+echo "main dir is $MWD"
+echo
+
+ARCH=`uname -m`
+case $ARCH in
+	arm*) ARCH=armv6l ;; # newest supported
+	*)ARCH=$ARCH ;;
+esac
+
+retrieve() {
+	SRCS=${1%% *}
+	[ -f ../0sources/"$SRCS" ] &&\
+	cp -a ../0sources/${SRCS} . ||\
+	wget -t0 -c ${URL}/${SRCS}
+	[ "$?" -eq 0 ] || exit 1
+	if [ "$DLD_ONLY" -eq 0 ];then
+		mv -f ${SRCS} ../0sources
+		exit 0
+	fi
+}
+
+extract() {
+	tar -xvf ${1}
+	[ "$?" -eq 0 ] || exit
+	mv -f ${1} ../0sources
+}
+
+compiler_flag() {
+	case $1 in
+		0)export CC="musl-gcc -static" ;;
+		1)CC_PATH=`find $MWD -type l -name ${ARCH}-gcc`
+			CC_PATH=${CC_PATH%/*}
+			export PATH=$CC_PATH:$PATH 
+			export CC=${ARCH}-gcc ;;
+	esac
+}
+make_build() {
+	case $1 in
+		0)make CC="musl-gcc -static" ;;
+		1)make CC="${ARCH}-gcc --static" ;;
+	esac
+}
+

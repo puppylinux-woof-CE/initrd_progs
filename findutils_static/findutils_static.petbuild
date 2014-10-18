@@ -1,0 +1,59 @@
+# findutils_static
+# Builds from https://github.com/puppylinux-woof-CE/petbuilds
+
+. ../func
+. ../build.conf
+
+# GOES TO INITRD
+
+URL=http://ftp.gnu.org/gnu/findutils/
+SRC=findutils
+PKG=findutils_static
+VER=4.4.2
+COMP=tar.gz
+DESC=""
+DEPS=
+CAT=BuildingBlock
+CWD=`pwd`
+
+ARCH=`uname -m`
+case $ARCH in
+ *64) LIBDIR=lib64 ;;
+ *) LIBDIR=lib ;;
+esac
+
+build() {
+	# since not X compiling forget build triplet
+	cd ${SRC}-${VER}
+	export CC="gcc --static"
+	./configure --prefix=/usr \
+				--disable-nls \
+				--host=x86_64-slackware-linux
+	[ "$?" -eq 0 ] || exit 1
+	make $MKFLGS
+	[ "$?" -eq 0 ] || exit 1
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	EXEC_F=`find . -type f -name 'find'`
+	EXEC_X=`find . -type f -name 'xargs'`
+	install -s -m 0755 $EXEC_F $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 $EXEC_X $CWD/${PKG}-${VER}-${ARCH}/bin
+	cd -
+}
+	
+package() {
+	# add this recipe
+	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
+	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	# move, don't package
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	rm -r ${SRC}-${VER}
+	rm -r $PKG-$VER-$ARCH
+	echo "moved to initrd"
+	echo "done!"
+}
+
+# main
+retrieve ${SRC}-${VER}.${COMP}
+extract ${SRC}-${VER}.${COMP}
+build
+package	

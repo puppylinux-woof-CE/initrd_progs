@@ -1,0 +1,70 @@
+# busybox_static
+# Builds from https://github.com/puppylinux-woof-CE/petbuilds
+
+# GOES TO INITRD
+
+. ../func
+. ../build.conf
+
+URL=http://busybox.net/downloads/
+PKG=busybox_static
+SRC_PKG=busybox
+VER=1.22.1
+COMP=tar.bz2
+DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
+DEPS=
+CAT=BuildingBlock
+
+ARCH=`uname -m`
+case $ARCH in
+ *64) LIBDIR=lib64 ;;
+ *) LIBDIR=lib ;;
+esac
+
+check() {
+	type musl-gcc 2>&1 >/dev/null
+	case $? in
+		0) echo "musl is installed" ;;
+		*) echo "No musl installed, unable to build $PKG, exiting"
+			exit 0 ;;
+	esac
+}
+
+build() {
+	cd ${SRC_PKG}-${VER}
+	cp -a ../DOTconfig-static .
+	mv DOTconfig-static .config
+	compiler_flag 1
+	make oldconfig
+	make_build 1 $MKFLG 
+	[ "$?" -eq 0 ] || exit 1
+	cd -
+}
+	
+package() {
+	echo "wait..."
+	# install
+	install -d -m 0755 ./$PKG-$VER-$ARCH/bin
+	install -d -m 0755 ./$PKG-$VER-$ARCH/sbin
+	install -m 0755 ${SRC_PKG}-${VER}/busybox ./$PKG-$VER-$ARCH/bin
+	(cd ./$PKG-$VER-$ARCH; sh ../bb-symlinks.sh install)
+	mv -f ./$PKG-$VER-$ARCH/sbin/* ./$PKG-$VER-$ARCH/bin
+	rm -r ./$PKG-$VER-$ARCH/sbin
+	# add this recipe
+	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
+	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	install -m 0644 DOTconfig-static ./$PKG-$VER-$ARCH/usr/share/doc
+	# move, don't package
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	rm -r ${SRC_PKG}-${VER}
+	rm -r ${PKG}-${VER}-$ARCH
+	echo "moved to initrd"
+	echo "done!"
+}
+
+# main
+check
+retrieve ${SRC_PKG}-${VER}.${COMP}
+extract ${SRC_PKG}-${VER}.${COMP}
+build
+package	

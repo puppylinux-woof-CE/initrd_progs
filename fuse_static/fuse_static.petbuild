@@ -1,0 +1,59 @@
+# fuse_static
+# Builds from https://github.com/puppylinux-woof-CE/petbuilds
+
+. ../func
+. ../build.conf
+
+# GOES TO INITRD
+
+VER=2.9.3
+URL=http://downloads.sourceforge.net/project/fuse/fuse-2.X/$VER/
+SRC=fuse
+PKG=fuse_static
+EXEC=fusermount
+COMP=tar.gz
+DESC=""
+DEPS=
+CAT=BuildingBlock
+CWD=`pwd`
+
+ARCH=`uname -m`
+case $ARCH in
+ *64) LIBDIR=lib64 ;;
+ *) LIBDIR=lib ;;
+esac
+
+build() {
+	# since not X compiling forget build triplet
+	cd ${SRC}-${VER}
+	compiler_flag 1
+	./configure --prefix=/usr \
+				--disable-nls \
+				--host=x86_64-slackware-linux
+	[ "$?" -eq 0 ] || exit 1
+	make_build 1 $MKFLGS
+	# [ "$?" -eq 0 ] || exit 1
+	# this bugs out but fusermount is built so we carry on
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	EXEC_FM=`find . -type f -name "$EXEC"`
+	install -s -m 0755 $EXEC_FM $CWD/${PKG}-${VER}-${ARCH}/bin
+	cd -
+}
+	
+package() {
+	# add this recipe
+	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
+	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	# move, don't package
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	rm -r ${SRC}-${VER}
+	rm -r $PKG-$VER-$ARCH
+	echo "moved to initrd"
+	echo "done!"
+}
+
+# main
+retrieve ${SRC}-${VER}.${COMP}
+extract ${SRC}-${VER}.${COMP}
+build
+package	
