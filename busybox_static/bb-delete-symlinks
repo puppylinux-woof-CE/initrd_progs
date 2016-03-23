@@ -1,0 +1,7 @@
+#!/bin/sh
+
+ls | \
+	while read file ; do
+		[ "$(readlink $file)" = "busybox" ] && rm $file
+	done
+

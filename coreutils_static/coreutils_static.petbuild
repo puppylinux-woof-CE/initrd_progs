@@ -1,5 +1,5 @@
 #!/bin/sh
-# ntfs-3g_static
+# coreutils_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../func
@@ -7,11 +7,11 @@
 
 # GOES TO INITRD
 
-URL=http://tuxera.com/opensource/
-SRC=ntfs-3g_ntfsprogs
-PKG=ntfs-3g_static
-VER=2015.3.14
-COMP=tgz
+URL=http://ftp.gnu.org/gnu/coreutils
+SRC=coreutils
+PKG=coreutils_static
+VER=8.25
+COMP=tar.xz
 DESC=""
 DEPS=
 CAT=BuildingBlock
@@ -25,33 +25,36 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# diff -Naur ntfs-3g_ntfsprogs-2015.3.14 ntfs-3g_ntfsprogs-2015.3.14-patched > libfuse-musl.patch
-	patch -N -p0 < libfuse-musl.patch
 	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
+	export FORCE_UNSAFE_CONFIGURE=1
 	if [ -f ../../cross-compile ] ; then
-		configure_force_linux_os
-		. ../../cross-compile source
+		export MUSL_INCLUDE=1
 		host=${ARCH}
+		CCOMP='sh ../../cross-compile'
 	else
 		compiler_flag
 	fi
-	./configure --prefix=/usr \
-				--disable-library \
-				--disable-ntfsprogs \
-				--enable-really-static \
-				--enable-mount-helper \
-				--host=${host}
+	configure_force_linux_os
+	${CCOMP} ./configure --prefix=/usr \
+					--disable-nls \
+					--disable-acl \
+					--disable-libsmack \
+					--without-selinux \
+					--without-gmp \
+					--enable-install-program=cp \
+					--host=${host}
 	[ "$?" -eq 0 ] || exit_error 1
 	if [ -f ../../cross-compile ] ; then
+		sed -i  -e 's|^CFLAGS =.*|CFLAGS = -g -Os -static -D_GNU_SOURCE|' \
+				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
 		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
 	else
 		make_build
 	fi
 	[ "$?" -eq 0 ] || exit_error 1
-	EXE=`find . -type f -name ${PKG%_*}`
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 src/cp $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
@@ -68,7 +71,8 @@ package() {
 }
 
 # main
-retrieve ${SRC}-${VER}.${COMP}
+retrieve "${SRC}-${VER}.${COMP} --no-check-certificate"
 extract ${SRC}-${VER}.${COMP}
 build
 package
+

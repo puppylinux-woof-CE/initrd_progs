@@ -1,0 +1,28 @@
+diff -Naur ntfs-3g_ntfsprogs-2015.3.14/libfuse-lite/fusermount.c ntfs-3g_ntfsprogs-2015.3.14-patched/libfuse-lite/fusermount.c
+--- ntfs-3g_ntfsprogs-2015.3.14/libfuse-lite/fusermount.c	2015-03-14 14:10:12.000000000 +0000
++++ ntfs-3g_ntfsprogs-2015.3.14-patched/libfuse-lite/fusermount.c	2016-03-17 09:45:44.073087034 +0000
+@@ -36,6 +36,10 @@
+ 
+ #define FUSE_DEV_NEW "/dev/fuse"
+ 
++#ifndef _PATH_MOUNTED
++#define _PATH_MOUNTED "/proc/mounts"
++#endif
++
+ #ifndef MS_DIRSYNC
+ #define MS_DIRSYNC 128
+ #endif
+diff -Naur ntfs-3g_ntfsprogs-2015.3.14/libfuse-lite/mount_util.c ntfs-3g_ntfsprogs-2015.3.14-patched/libfuse-lite/mount_util.c
+--- ntfs-3g_ntfsprogs-2015.3.14/libfuse-lite/mount_util.c	2015-03-14 14:10:12.000000000 +0000
++++ ntfs-3g_ntfsprogs-2015.3.14-patched/libfuse-lite/mount_util.c	2016-03-17 09:47:38.459750087 +0000
+@@ -255,6 +255,10 @@
+ 
+ #else /* __SOLARIS__ */
+ 
++#ifndef _PATH_MOUNTED
++#define _PATH_MOUNTED "/proc/mounts"
++#endif /* _PATH_MOUNTED */
++
+ static int mtab_needs_update(const char *mnt)
+ {
+ 	int res;

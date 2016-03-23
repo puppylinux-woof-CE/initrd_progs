@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ -f busybox ] ; then
+	rm -f rev #util-linux rev = busybox rev
+	./busybox --list | \
+		while read file ; do
+			[ ! -e "$file" ] && ln -s busybox "$file"
+		done
+fi
+

@@ -1,3 +1,4 @@
+#!/bin/sh
 # grep_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
@@ -9,7 +10,7 @@
 URL=http://ftp.gnu.org/gnu/grep/
 SRC=grep
 PKG=grep_static
-VER=2.15
+VER=2.24
 COMP=tar.xz
 DESC=""
 DEPS=
@@ -18,20 +19,30 @@ CWD=`pwd`
 
 ARCH=`uname -m`
 case $ARCH in
- *64) LIBDIR=lib64 ;;
- *) LIBDIR=lib ;;
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
 esac
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
-	compiler_flag 1
-	./configure --prefix=/usr \
-				--disable-nls \
-				--host=x86_64-slackware-linux
-	[ "$?" -eq 0 ] || exit 1
-	make_build 1 $MKFLGS
-	[ "$?" -eq 0 ] || exit 1
+	configure_force_linux_os
+	if [ -f ../../cross-compile ] ; then
+		#export MUSL_INCLUDE=1
+		CCOMP='sh ../../cross-compile'
+	else
+		compiler_flag
+	fi
+	${CCOMP} ./configure --prefix=/usr --disable-nls --host=${ARCH}
+	[ "$?" -eq 0 ] || exit_error 1
+	if [ -f ../../cross-compile ] ; then
+		sed -i  -e "s|^CFLAGS =.*|CFLAGS = -g -Os -static -D_GNU_SOURCE|" \
+				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
+		${CCOMP} make ${MKFLG} LDFLAGS=-static
+	else
+		make_build
+	fi
+	[ "$?" -eq 0 ] || exit_error 1
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	install -s -m 0755 src/$SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
@@ -39,12 +50,12 @@ build() {
 	
 package() {
 	# add this recipe
-	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
-	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
 	rm -r ${SRC}-${VER}
-	rm -r $PKG-$VER-$ARCH
+	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"
 	echo "done!"
 }
@@ -53,4 +64,4 @@ package() {
 retrieve ${SRC}-${VER}.${COMP}
 extract ${SRC}-${VER}.${COMP}
 build
-package	
+package

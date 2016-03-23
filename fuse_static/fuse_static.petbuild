@@ -1,3 +1,4 @@
+#!/bin/sh
 # fuse_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
@@ -6,8 +7,8 @@
 
 # GOES TO INITRD
 
-VER=2.9.3
-URL=http://downloads.sourceforge.net/project/fuse/fuse-2.X/$VER/
+VER=2.9.5
+URL=https://github.com/libfuse/libfuse/releases/download/fuse_${VER//./_}
 SRC=fuse
 PKG=fuse_static
 EXEC=fusermount
@@ -19,20 +20,33 @@ CWD=`pwd`
 
 ARCH=`uname -m`
 case $ARCH in
- *64) LIBDIR=lib64 ;;
- *) LIBDIR=lib ;;
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
 esac
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
 	# since not X compiling forget build triplet
+	conf_opts='--prefix=/usr --disable-lib --disable-shared --enable-static --disable-example'
+	configure_force_linux_os
 	cd ${SRC}-${VER}
-	compiler_flag 1
-	./configure --prefix=/usr \
-				--disable-nls \
-				--host=x86_64-slackware-linux
-	[ "$?" -eq 0 ] || exit 1
-	make_build 1 $MKFLGS
-	# [ "$?" -eq 0 ] || exit 1
+	if [ -f ../../cross-compile ] ; then
+		. ../../cross-compile source
+		./configure ${conf_opts} --host=${ARCH}
+		[ "$?" -eq 0 ] || exit_error 1
+		sed -i 's|^LIBS =.*|LIBS = -static|' util/Makefile
+		sed -i 's|^LDFLAGS =.*|LDFLAGS = -static|' util/Makefile
+		make clean
+		## https://github.com/pwaller/static-fusermount/blob/master/Dockerfile
+		make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
+	else
+		compiler_flag
+		./configure ${conf_opts} --host=${host}
+		[ "$?" -eq 0 ] || exit_error 1
+		#make_build
+		make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
+	fi
+	#[ $? -eq 0 ] || exit_error 1
 	# this bugs out but fusermount is built so we carry on
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	EXEC_FM=`find . -type f -name "$EXEC"`
@@ -42,12 +56,12 @@ build() {
 	
 package() {
 	# add this recipe
-	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
-	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
 	rm -r ${SRC}-${VER}
-	rm -r $PKG-$VER-$ARCH
+	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"
 	echo "done!"
 }
@@ -56,4 +70,4 @@ package() {
 retrieve ${SRC}-${VER}.${COMP}
 extract ${SRC}-${VER}.${COMP}
 build
-package	
+package

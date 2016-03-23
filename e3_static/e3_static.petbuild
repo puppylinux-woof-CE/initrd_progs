@@ -1,3 +1,4 @@
+#!/bin/sh
 # e3_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
@@ -18,22 +19,21 @@ CWD=`pwd`
 
 ARCH=`uname -m`
 case $ARCH in
- *64) LIBDIR=lib64 
-	FLG=64 ;;
- *) LIBDIR=lib 
-	FLG=32 ;;
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
 esac
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
 	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
 	make
-	[ "$?" -eq 0 ] || exit
+	[ "$?" -eq 0 ] || exit_error 1
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
-	
+
 package() {
 	# add this recipe
 	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
@@ -50,4 +50,4 @@ package() {
 retrieve ${SRC}-${VER}.${COMP}
 extract ${SRC}-${VER}.${COMP}
 build
-package	
+package
