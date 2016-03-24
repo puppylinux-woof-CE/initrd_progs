@@ -1,5 +1,13 @@
+#!/bin/sh
 # busybox_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
+
+### LINKS
+## http://ewontfix.com/12/
+## https://github.com/kanj/elfs/issues/4
+## http://wiki.musl-libc.org/wiki/Building_Busybox
+## http://unix.stackexchange.com/questions/29576/difference-between-gawk-vs-awk
+## http://superuser.com/questions/485808/sed-command-on-busybox-expects-different-syntax
 
 # GOES TO INITRD
 
@@ -9,7 +17,7 @@
 URL=http://busybox.net/downloads/
 PKG=busybox_static
 SRC_PKG=busybox
-VER=1.22.1
+VER=1.24.2
 COMP=tar.bz2
 DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
 DEPS=
@@ -17,45 +25,105 @@ CAT=BuildingBlock
 
 ARCH=`uname -m`
 case $ARCH in
- *64) LIBDIR=lib64 ;;
- *) LIBDIR=lib ;;
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
 esac
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+
+function download_kernel_headers() {
+	case $ARCH in
+		i?86) KARCH=x86 ;;
+		*) KARCH=$ARCH ;;
+	esac
+	kpkg='kernel-headers-3.12.6-5'
+	if [ ! -f "${kpkg}.tar.gz" ] ; then
+		wget -O ${kpkg}.tar.gz --no-check-certificate https://github.com/sabotage-linux/kernel-headers/archive/v3.12.6-5.tar.gz
+	fi
+	if [ ! -d "${kpkg}" ] ; then
+		tar -zxf ${kpkg}.tar.gz
+		if [ $? -ne 0 ] ; then
+			rm -f ${kpkg}.tar.gz
+			exit_error 1
+		fi
+	fi
+	KDIR=${PWD}/kernel-headers
+	if [ ! -d "${KDIR}" ] ; then
+		mkdir -p ${KDIR}
+		cd ${kpkg}
+		make ARCH=${KARCH} prefix=/usr DESTDIR=${KDIR} install >/dev/null
+		if [ $? -ne 0 ] ; then
+			rm -rf ${KDIR}
+			exit_error 1
+		fi
+		cd ..
+	fi
+	export C_INCLUDE_PATH=${KDIR}/usr/include:${C_INCLUDE_PATH}
+	export CPLUS_INCLUDE_PATH=${KDIR}/usr/include:${CPLUS_INCLUDE_PATH}
+}
 
 check() {
-	type musl-gcc 2>&1 >/dev/null
-	case $? in
-		0) echo "musl is installed" ;;
-		*) echo "No musl installed, unable to build $PKG, exiting"
-			exit 0 ;;
-	esac
+	if [ -f ../cross-compile ] ; then
+		echo -n
+	else
+		if ! which musl-gcc &>/dev/null ; then
+			echo "No musl installed, unable to build $PKG, exiting"
+		fi
+	fi
 }
 
 build() {
 	cd ${SRC_PKG}-${VER}
-	cp -a ../DOTconfig-static .
-	mv DOTconfig-static .config
-	compiler_flag 1
-	make oldconfig
-	make_build 1 $MKFLG 
-	[ "$?" -eq 0 ] || exit 1
+	# diff -Naur busybox-1.24.2 busybox-1.24.2_patched > busybox.patch
+	patch -p1 < ../busybox.patch
+	##
+	[ -f ../DOTconfig-static ] && cp -a ../DOTconfig-static .config
+	[ -f ../.config ] && cp -a ../.config .
+	#__inline seems to get activated when -std=gnu99 is used, causing havoc
+	sed -i 's,__inline,,' ./scripts/kconfig/zconf.hash.c_shipped
+	if [ -f ../../cross-compile ] ; then
+		export MUSL_INCLUDE=1
+		#CCOMP='sh ../../cross-compile make'
+		if [ -f .config ] ; then
+			${CCOMP} make oldconfig || exit_error 1
+		else
+			${CCOMP} make menuconfig || exit_error 1
+		fi
+		# https://github.com/sabotage-linux/sabotage/blob/master/pkg/busybox
+		export CC=${ARCH}-gcc
+		export HOSTGCC=gcc
+		  CC=${ARCH}-gcc HOSTGCC=gcc \
+		  V=1 LDFLAGS=-static HOSTLDFLAGS=-static \
+		  CFLAGS_busybox="-Wl,-z,muldefs -Werror-implicit-function-declaration" \
+		  HOSTCC="$HOSTCC -static" CC="$CC -static" HOSTCFLAGS=-D_GNU_SOURCE \
+		../../cross-compile make ${MKFLG} #CROSS_COMPILE=${ARCH}-
+	else
+		compiler_flag
+		make oldconfig
+		CFLAGS='-Os -static' \
+		 HOSTGCC=gcc \
+		  CFLAGS_busybox="-Wl,-z,muldefs" make_build
+	fi
+	[ $? -eq 0 ] || exit_error 1
+	[ -f busybox ] || exit_error 1
 	cd -
 }
-	
+
 package() {
 	echo "wait..."
 	# install
-	install -d -m 0755 ./$PKG-$VER-$ARCH/bin
-	install -d -m 0755 ./$PKG-$VER-$ARCH/sbin
-	install -m 0755 ${SRC_PKG}-${VER}/busybox ./$PKG-$VER-$ARCH/bin
-	(cd ./$PKG-$VER-$ARCH; sh ../bb-symlinks.sh install)
-	mv -f ./$PKG-$VER-$ARCH/sbin/* ./$PKG-$VER-$ARCH/bin
-	rm -r ./$PKG-$VER-$ARCH/sbin
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin
+	#install -d -m 0755 ./${PKG}-${VER}-${ARCH}/sbin
+	install -m 0755 ${SRC_PKG}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
+	install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
+	install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
+	#mv -f ./${PKG}-${VER}-${ARCH}/sbin/* ./${PKG}-${VER}-${ARCH}/bin
+	#rm -r ./${PKG}-${VER}-${ARCH}/sbin
 	# add this recipe
-	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
-	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
-	install -m 0644 DOTconfig-static ./$PKG-$VER-$ARCH/usr/share/doc
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -m 0644 DOTconfig-static ./${PKG}-${VER}-${ARCH}/usr/share/doc
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
 	rm -r ${SRC_PKG}-${VER}
 	rm -r ${PKG}-${VER}-$ARCH
 	echo "moved to initrd"
@@ -63,8 +131,9 @@ package() {
 }
 
 # main
-check
+#download_kernel_headers
 retrieve ${SRC_PKG}-${VER}.${COMP}
+check
 extract ${SRC_PKG}-${VER}.${COMP}
 build
-package	
+package

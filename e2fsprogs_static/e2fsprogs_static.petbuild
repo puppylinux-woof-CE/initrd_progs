@@ -1,5 +1,5 @@
 #!/bin/sh
-# ntfs-3g_static
+# e2fsprogs_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../func
@@ -7,11 +7,11 @@
 
 # GOES TO INITRD
 
-URL=http://tuxera.com/opensource/
-SRC=ntfs-3g_ntfsprogs
-PKG=ntfs-3g_static
-VER=2015.3.14
-COMP=tgz
+URL=http://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v1.42.13
+SRC=e2fsprogs
+PKG=e2fsprogs_static
+VER=1.42.13
+COMP=tar.gz
 DESC=""
 DEPS=
 CAT=BuildingBlock
@@ -25,33 +25,31 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# diff -Naur ntfs-3g_ntfsprogs-2015.3.14 ntfs-3g_ntfsprogs-2015.3.14-patched > libfuse-musl.patch
-	patch -N -p0 < libfuse-musl.patch
 	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
 	if [ -f ../../cross-compile ] ; then
+		export MUSL_INCLUDE=1
 		configure_force_linux_os
-		. ../../cross-compile source
-		host=${ARCH}
-	else
-		compiler_flag
-	fi
-	./configure --prefix=/usr \
-				--disable-library \
-				--disable-ntfsprogs \
-				--enable-really-static \
-				--enable-mount-helper \
-				--host=${host}
-	[ "$?" -eq 0 ] || exit_error 1
-	if [ -f ../../cross-compile ] ; then
+		sh ../../cross-compile \
+			./configure --prefix=/usr --disable-nls --host=${ARCH}
+		[ "$?" -eq 0 ] || exit_error 1
+		sed -i  -e 's|^CFLAGS =.*|CFLAGS = -g -Os -static -D_POSIX_C_SOURCE=200112L|' \
+				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
 		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
 	else
+		compiler_flag
+		./configure --prefix=/usr --disable-nls --host=${host}
+		[ "$?" -eq 0 ] || exit_error 1
 		make_build
 	fi
 	[ "$?" -eq 0 ] || exit_error 1
-	EXE=`find . -type f -name ${PKG%_*}`
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
+	EXEC_E2=`find . -type f -name 'e2fsck'`
+	EXEC_FS=`find . -type f -name 'fsck'`
+	EXEC_RS=`find . -type f -name 'resize2fs'`
+	install -s -m 0755 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 

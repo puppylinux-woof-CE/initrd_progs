@@ -1,4 +1,0 @@
-You can run ./build_all.sh and an attempt will be made to build all
-packages in the queue defined by ORDER or you can cd in to each dir
-one at a time and build individually. If you know what you are doing,
-you can mix up or delete entries from ORDER.

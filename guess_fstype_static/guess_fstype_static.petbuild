@@ -1,3 +1,4 @@
+#!/bin/sh
 # guess_fstype_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
@@ -18,30 +19,21 @@ CWD=`pwd`
 
 ARCH=`uname -m`
 case $ARCH in
- *64) LIBDIR=lib64 ;;
- *) LIBDIR=lib ;;
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
 esac
-
-patch() {
-	cd ${SRC}-${VER}
-	type musl-gcc 2>&1 > /dev/null
-	case $? in
-		0) #patch Makefile for static
-			sed -i 's%^#CC%CC%' Makefile ;;
-		*) echo ;;
-	esac
-	cd -
-}
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
 	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
-	type musl-gcc 2>&1 > /dev/null
-	case $? in
-		0) make ;;
-		*) make_build 1;;
-	esac
-	[ "$?" -eq 0 ] || exit
+	cp ../Makefile .
+	if [ -f ../../cross-compile ] ; then
+		sh ../../cross-compile
+	else
+		make_build
+	fi
+	[ "$?" -eq 0 ] || exit_error 1
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	install -s -m 0755 ${PKG%_*} $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
@@ -61,9 +53,7 @@ package() {
 }
 
 # main
-check
 retrieve ${SRC}-${VER}.${COMP}
 extract ${SRC}-${VER}.${COMP}
-patch
 build
 package	

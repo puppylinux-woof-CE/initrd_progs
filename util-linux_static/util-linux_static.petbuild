@@ -1,0 +1,126 @@
+#!/bin/sh
+# util-linux_static
+# Builds from https://github.com/puppylinux-woof-CE/petbuilds
+
+# https://forums.gentoo.org/viewtopic-t-824934-start-0.html
+
+. ../func
+. ../build.conf
+
+# GOES TO INITRD
+
+URL=https://www.kernel.org/pub/linux/utils/util-linux/v2.27
+SRC=util-linux
+PKG=util-linux_static
+VER=2.27.1
+COMP=tar.xz
+DESC=""
+DEPS=
+CAT=BuildingBlock
+CWD=`pwd`
+
+ARCH=`uname -m`
+case $ARCH in
+	*64) LIBDIR=lib64 ;;
+	*) LIBDIR=lib ;;
+esac
+[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+
+build() {
+	# since not X compiling forget build triplet
+	cd ${SRC}-${VER}
+	if [ -f ../../cross-compile ] ; then
+		#export MUSL_INCLUDE=1
+		host=${ARCH}
+		CCOMP='sh ../../cross-compile'
+	else
+		compiler_flag
+	fi
+	configure_force_linux_os #linux_os=no
+	#--enable-static-programs=losetup,mount,umount,fdisk,sfdisk,blkid,nsenter,unshare
+	${CCOMP} ./configure --prefix=/usr \
+				--enable-static-programs=losetup,blkid,unshare \
+				--host=${host} \
+				--disable-shared \
+				--disable-nls \
+				--without-ncurses \
+				--disable-libuuid \
+				--disable-libmount \
+				--disable-mount \
+				--disable-fsck \
+				--disable-partx \
+				--disable-uuidd \
+				--disable-mountpoint \
+				--disable-fallocate \
+				--disable-nsenter \
+				--disable-setpriv \
+				--disable-eject \
+				--disable-agetty \
+				--disable-cramfs \
+				--disable-bfs \
+				--disable-fdformat \
+				--disable-hwclock \
+				--disable-wdctl \
+				--disable-switch_root \
+				--disable-pivot_root \
+				--disable-kill \
+				--disable-utmpdump \
+				--disable-raw \
+				--disable-rename \
+				--disable-chfn-chsh-password \
+				--disable-chsh-only-listed \
+				--disable-login \
+				--disable-sulogin \
+				--disable-su \
+				--disable-runuser \
+				--disable-ul \
+				--disable-more \
+				--disable-pg \
+				--disable-setterm \
+				--disable-schedutils \
+				--disable-wall \
+				--disable-bash-completion \
+				--disable-pg-bell \
+				--disable-use-tty-group \
+				--disable-makeinstall-chown \
+				--disable-makeinstall-setuid \
+				--without-ncurses --without-tinfo --without-python --without-selinux
+	[ "$?" -eq 0 ] || exit_error 1
+	sed -i 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
+	if [ -f ../../cross-compile ] ; then
+		sh ../../cross-compile make ${MKFLG} losetup
+		sh ../../cross-compile make ${MKFLG} blkid
+		sh ../../cross-compile make ${MKFLG} unshare
+		#sh ../../cross-compile make ${MKFLG} rev
+	else
+		make_build ${MKFLG} blkid
+		make_build ${MKFLG} losetup
+		make_build ${MKFLG} unshare
+		#make_build ${MKFLG} rev
+	fi
+	[ $? -eq 0 ] || exit_error 1
+	[ -f losetup ] || exit_error 1
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
+	install -s -m 0755 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
+	cd -
+}
+
+package() {
+	# add this recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	# move, don't package
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	rm -r ${SRC}-${VER}
+	rm -r ${PKG}-${VER}-${ARCH}
+	echo "moved to initrd"
+	echo "done!"
+}
+
+# main
+retrieve "${SRC}-${VER}.${COMP} --no-check-certificate"
+extract ${SRC}-${VER}.${COMP}
+build
+package
