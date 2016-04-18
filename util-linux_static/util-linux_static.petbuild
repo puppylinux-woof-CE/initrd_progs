@@ -9,10 +9,10 @@
 
 # GOES TO INITRD
 
-URL=https://www.kernel.org/pub/linux/utils/util-linux/v2.27
+URL=https://www.kernel.org/pub/linux/utils/util-linux/v2.28
 SRC=util-linux
 PKG=util-linux_static
-VER=2.27.1
+VER=2.28
 COMP=tar.xz
 DESC=""
 DEPS=
