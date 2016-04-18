@@ -5,7 +5,7 @@
 
 export MWD=`pwd`
 
-if ! which gcc &>/dev/null ; then
+if ! which make &>/dev/null ; then
 	echo "It looks like development tools are not installed.."
 	echo "Press enter to continue, CTRL-C to cancel" ; read zzz
 fi
@@ -199,6 +199,7 @@ build_pkgs() {
 			echo "Exiting.." ; rm -f .fatal
 			exit 1
 		fi
+		[ -d "${init_pkg}_static" ] && init_pkg=${init_pkg}_static
 		check_bin $init_pkg
 		if [ $? -eq 0 ] ; then ##found
 			echo "$init_pkg exists ... skipping"
