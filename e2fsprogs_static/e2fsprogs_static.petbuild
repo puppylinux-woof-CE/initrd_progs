@@ -28,28 +28,34 @@ build() {
 	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
 	if [ -f ../../cross-compile ] ; then
-		export MUSL_INCLUDE=1
 		configure_force_linux_os
 		sh ../../cross-compile \
-			./configure --prefix=/usr --disable-nls --host=${ARCH}
-		[ "$?" -eq 0 ] || exit_error 1
-		sed -i  -e 's|^CFLAGS =.*|CFLAGS = -g -Os -static -D_POSIX_C_SOURCE=200112L|' \
-				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
+		./configure --prefix=/usr --disable-nls \
+		--disable-elf-shlibs --disable-bsd-shlibs --disable-rpath --host=${ARCH}
+		[ $? -eq 0 ] || exit_error 1
+		sed -i -e 's|.so$|.a|' -e 's|.so |.a |' $(find . -type f -name Makefile)
 		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
 	else
 		compiler_flag
-		./configure --prefix=/usr --disable-nls --host=${host}
-		[ "$?" -eq 0 ] || exit_error 1
+		./configure --prefix=/usr --disable-nls \
+		--disable-elf-shlibs --disable-bsd-shlibs --disable-rpath --host=${ARCH}
+		[ $? -eq 0 ] || exit_error 1
 		make_build
 	fi
-	[ "$?" -eq 0 ] || exit_error 1
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	EXEC_E2=`find . -type f -name 'e2fsck'`
 	EXEC_FS=`find . -type f -name 'fsck'`
 	EXEC_RS=`find . -type f -name 'resize2fs'`
-	install -s -m 0755 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
+	[ -f $EXEC_E2 ] || exit_error 1
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	if [ -f ../../cross-compile ] ; then
+		install2 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
+	else
+		install -s -m 0755 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
+	fi
 	cd -
 }
 

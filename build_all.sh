@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # packages can be built individually if you wish
 
 . ./build.conf && export MKFLG
@@ -16,152 +16,169 @@ case $ARCH in
 	*)    ARCH=$ARCH ;;
 esac
 
-###################################################################
-#				CROSS COMPILER from ABORIGINAL LINUX
-###################################################################
-
-function aboriginal_cross_compiler() {
-	# download Landley's Aboriginal cross compiler
-	echo
-	echo "Download W.Landley's Aboriginal cross compiler"
-	echo -n "Press enter to continue, CTRL-C to cancel..." ; read zzz
-	local COMPILER=cross-compiler
-	local URL=http://landley.net/aboriginal/downloads/binaries
-	local page=$(wget -q -O -  http://landley.net/aboriginal/downloads/binaries/)
-	if echo "$page" | grep -q '\.tar\.gz' ; then
-		COMP='tar.gz'
-	elif echo "$page" | grep -q '\.tar\.bz2' ; then
-		COMP='tar.bz2'
-	elif echo "$page" | grep -q '\.tar\.xz' ; then
-		COMP='tar.xz'
-	else
- 		echo "Could not determine compression type"
-		#error, look in 0sources... offline mode
-		p=$(find 0sources -type f -name '*compiler*'$(uname -m)'*' | head -1)
-		if [ -f "$p" ] ; then
-			PACKAGE=${p##*/}
-			ARCH=$(uname -m)
-			echo ; echo "Found $PACKAGE in 0sources..."
-		else
-			echo ; return 1
-		fi
-	fi
-	###
-	case $ARCH in i686)
-		if [ "$COMP" ] ; then
-			if echo "$page" | grep -q 'i486' ; then ASK=1 ; fi
-		else
-			i486=${PACKAGE//i686/i486}
-			[ -f "0sources/$i486" ] && ASK=1
-		fi
-		if [ "$ASK" ] ; then
-			echo ; echo -n "Use i486 instead of i686? [Y/n]: " ; read answer
-			case $answer in
-				n|N) echo -n ;;
-				*)
-					[ ! "$COMP" ] && PACKAGE=${i486}
-					ARCH=i486
-					;;
-			esac
-		fi
-	esac
-	sleep 1
-	###
-	[ "$COMP" ] && PACKAGE=${COMPILER}-${ARCH}.${COMP}
-	## download
-	if [ ! -f "0sources/${PACKAGE}" ];then
-		wget -P 0sources ${URL}/${PACKAGE}
-		if [ $? -ne 0 ] ; then
-			rm -f ${URL}/${PACKAGE}
-			echo "failed to download ${PACKAGE}"
-			return 1
-		fi
-	fi
-	[ "$DLD_ONLY" = "1" ] && return 0
-	## extract
-	tar --directory=$PWD -xaf 0sources/${PACKAGE}
-	if [ $? -ne 0 ] ; then
-		rm -rf ${PACKAGE%.tar.*} #directory
-		rm -f 0sources/${PACKAGE}
-		echo "failed to extract ${PACKAGE}"
-		return 1
-	fi
-	echo ; echo "successfully downloaded and extracted ${PACKAGE}"
-}
-
-
 
 ###################################################################
 #							MAIN
 ###################################################################
 
 mkdir -p 0initrd/bin 0logs 0sources
-
-MUSL_GCC="$(which musl-gcc 2>/dev/null)"
+CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
 
 case $1 in
 	l|local)
-		MUSL_GCC="$(whereis musl-gcc 2>/dev/null | head -1 | sed 's|.* ||')"
-		if [ -f "$MUSL_GCC" ] ; then
-			chmod +x $MUSL_GCC
+		CCOMP_GCC="$(whereis musl-gcc 2>/dev/null | head -1 | sed 's|.* ||')"
+		if [ -f "$CCOMP_GCC" ] ; then
+			chmod +x $CCOMP_GCC
 		else
 			echo "Need musl-gcc"
 			exit 1
 		fi
 		;;
 	a|aboriginal)
-		[ -f "$MUSL_GCC" ] && chmod -x $MUSL_GCC
+		[ -f "$CCOMP_GCC" ] && chmod -x $CCOMP_GCC
 		;;
 esac
 
-if [ -x "$MUSL_GCC" ] ; then
+if [ -x "$CCOMP_GCC" ] ; then
 	echo
-	echo "Using musl-gcc. If you want to download and use "
-	echo "a recent cross compiler from Aboriginal Linux, then:"
-	echo "  chmod -x $MUSL_GCC "
+	echo "* Using system's musl-gcc. If you want to download and use "
+	echo "* a recent cross compiler from Aboriginal Linux, then:"
+	echo " chmod -x $CCOMP_GCC "
 	echo
-	echo -n "Press enter to continue or CTRL-C to cancel..." ; read zzz
+	echo "Type A and hit enter to use the aboriginal linux stuff"
+	echo -n "Press enter to continue or CTRL-C to cancel... " ; read zzz
+	case $zzz in a|A)
+		chmod -x "$CCOMP_GCC"
+		exec "$0"
+	esac
 	rm -f cross-compile
 else
-	## aboriginal linux
-	CROSS_CC_EX=`find $MWD -type d -name '*cross-compiler*' | head -1`
-	if [ -z "$CROSS_CC_EX" ];then
-		aboriginal_cross_compiler
+
+	#############################
+	##     aboriginal linux     #
+	#############################
+	case $ARCH in
+		i?86|x86_64) ok=1 ;;
+		*)
+			echo "*** The cross-compilers from aboriginal linux"
+			echo "*** work in x86 systems only, I guess."
+			echo "*** Exiting..."
+			exit 1
+	esac
+
+	#--------------------------------------------------
+	#             SELECT TARGET ARCH
+	#--------------------------------------------------
+	ARCH_LIST="default i486 x86_64 armv4 armv6l powerpc"
+	echo
+	echo "We're going to compile apps for the init ram disk"
+	echo "Select the arch you want to compile to"
+	echo
+	x=1
+	for a in $ARCH_LIST ; do
+		case $a in
+			default) echo "	${x}) default [${ARCH}]" ;;
+			*) echo "	${x}) $a" ;;
+		esac
+		let x++
+	done
+	echo "	*) default [${ARCH}]"
+	echo
+	echo -n "Enter your choice: " ; read choice
+	x=1
+	for a in $ARCH_LIST ; do
+		if [ "$x" = "$choice" ] ; then
+			selected_arch=$a
+			break
+		fi
+		let x++
+	done
+	#-
+	case $selected_arch in
+		default|"")ok=1 ;;
+		*)
+			case $ARCH in i?86)
+				case $selected_arch in *64)
+					echo
+					echo "*** Trying to compile for a 64bit arch in a 32bit system?"
+					echo "*** That's not possible.. exiting.."
+					exit 1
+				esac
+			esac
+			ARCH=$selected_arch
+			;;
+	esac
+	
+	echo
+	echo "OK: $ARCH"
+	sleep 1.5
+
+	#--------------------------------------------------
+	#      CROSS COMPILER FROM ABORIGINAL LINUX
+	#--------------------------------------------------
+	CCOMP_DIR=cross-compiler-${ARCH}
+	URL=http://landley.net/aboriginal/downloads/binaries
+	PACKAGE=${CCOMP_DIR}.tar.gz
+	echo
+	## download
+	if [ ! -f "0sources/${PACKAGE}" ];then
+		echo "Download cross compiler from Aboriginal Linux"
+		echo -n "Press enter to continue, CTRL-C to cancel..." ; read zzz
+		wget -c -P 0sources ${URL}/${PACKAGE}
 		if [ $? -ne 0 ] ; then
-			if [ "$DLD_ONLY" = "1" ] ; then
-				echo "Could not download cross compiler !!"
-			else
-				echo "WARNING: It's *not* advised to continue, but you can still continue"
-				echo "Press CTRL-C to cancel and ENTER to continue"
-				read zzz
-			fi
+			rm -rf ${CCOMP_DIR}
+			echo "failed to download ${PACKAGE}"
+			exit 1
 		fi
-	else
-		echo ; echo "Using cross compiler from Aboriginal Linux" ; echo
 	fi
-	CROSS_CC_EX=`find $MWD -type d -name '*cross-compiler*' | head -1`
-	if [ -d "$CROSS_CC_EX" ] ; then
-		export OVERRIDE_ARCH=${CROSS_CC_EX##*-}
-		ARCH=${OVERRIDE_ARCH}
-		echo '#!/bin/sh
-		XPATH='${CROSS_CC_EX}'
-		ARCH='${ARCH}'
-		if [ "$MUSL_INCLUDE" ] || [ "$MUSL_INCLUDE_ONLY" ] ; then
-			export C_INCLUDE_PATH=${XPATH}/include:${C_INCLUDE_PATH}
-			export CPLUS_INCLUDE_PATH=${XPATH}/include:${CPLUS_INCLUDE_PATH}
+	[ "$DLD_ONLY" = "1" ] && return 0
+	## extract
+	if [ ! -d "$CCOMP_DIR" ] ; then
+		tar --directory=$PWD -xaf 0sources/${PACKAGE}
+		if [ $? -ne 0 ] ; then
+			rm -rf ${CCOMP_DIR}
+			rm -fv 0sources/${PACKAGE}
+			echo "failed to extract ${PACKAGE}"
+			exit 1
 		fi
-		if [ ! "$MUSL_INCLUDE_ONLY" ] ; then
-			export LIBRARY_PATH=${XPATH}/lib:${LIBRARY_PATH}
-			export PATH=${XPATH}/bin:$PATH
-			export LD_LIBRARY_PATH=${XPATH}/lib:${LD_LIBRARY_PATH}
-		fi
-		case $1 in
-			source) ok=1 ;;
-			"") make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld LDFLAGS=-static ;;
-			*) exec "$@" ;;
-		esac' > cross-compile
-		chmod +x cross-compile
 	fi
+	echo ; echo "successfully downloaded and extracted ${PACKAGE}"
+	#-------------------------------------------------------------
+
+	[ ! -d "$CCOMP_DIR" ] && { echo "$CCOMP_DIR not found"; exit 1; }
+	#export FCCOMP_DIR=$PWD/cross-compiler-${ARCH}
+	#export CCOMP_TRIPLET=$(find "${FCCOMP_DIR}" -maxdepth 1 -type d -name '*unknown-linux*')
+	#export TRIPLET=${CCOMP_TRIPLET##*/}
+	#find ${FCCOMP_DIR}/${TRIPLET}/bin | while read filez ; do
+	#	[ ! -f "$filez" ] && continue
+	#	name=${filez##*/}
+	#	symlink=${FCCOMP_DIR}/bin/${TRIPLET}-${name}
+	#	ln -fv $filez $symlink &>/dev/null
+	#done
+	cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
+	echo
+	echo "Using cross compiler from Aboriginal Linux"
+	echo
+	export OVERRIDE_ARCH=${ARCH}
+	echo '#!/bin/sh
+XPATH='${PWD}/${CCOMP_DIR}'
+ARCH='${ARCH}'
+#TRIPLET='${TRIPLET}'
+if [ "$CCOMP_INCLUDE" ] || [ "$CCOMP_INCLUDE_ONLY" ] ; then
+	export C_INCLUDE_PATH=${XPATH}/include:${C_INCLUDE_PATH}
+	export CPLUS_INCLUDE_PATH=${XPATH}/include:${CPLUS_INCLUDE_PATH}
+fi
+if [ ! "$CCOMP_INCLUDE_ONLY" ] ; then
+	export LIBRARY_PATH=${LIB_PATH}${LIBRARY_PATH}
+	export LD_LIBRARY_PATH=${LIB_PATH}${LD_LIBRARY_PATH}
+	export PATH=${BIN_PATH}${XPATH}/bin:$PATH
+fi
+case $1 in
+	source) ok=1 ;;
+	"") make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld LDFLAGS=-static ;;
+	*) exec "$@" ;;
+esac' > cross-compile
+chmod +x cross-compile
 fi
 
 #############
@@ -194,7 +211,10 @@ build_pkgs() {
 		echo
 	fi
 	sleep 1
+	#ex: export ZINITRD=waitmax
+	[ "$ZINITRD" ] && INITRD="$ZINITRD"
 	for init_pkg in ${INITRD} ; do
+		unset BIN_PATH LIB_PATH CCOMP_INCLUDE CCOMP_INCLUDE_ONLY
 		if [ -f .fatal ] ; then
 			echo "Exiting.." ; rm -f .fatal
 			exit 1
@@ -236,12 +256,13 @@ build_pkgs() {
 
 build_pkgs
 
-if [ "$DLD_ONLY" = "1" ] ; then
-	rm -f cross-compile .fatal
-	exit
-fi
+rm -f cross-compile .fatal #comment out to debug
 
-### create initial ramdisk
+[ "$DLD_ONLY" = "1" ] && exit
+
+#----------------------------------------------------
+#            create initial ramdisk
+#----------------------------------------------------
 
 if [ "$INITRD_GZ" = "1" ] ; then
 	echo
@@ -263,18 +284,17 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	rm -f ZZ_initrd-expanded/bin/readme
 	cd ZZ_initrd-expanded
 	for app in awk sed ; do
-		if [ -f bin/${app} ] ; then
-			echo -n "Use busybox ${app} instead of the full version? [Y/n]: "
-			read answer
-			case $answer in
-				n|N) echo -n ;;
-				*) rm -fv bin/${app} ;;
-			esac
-		fi
+		[ -f bin/${app} ] || continue
+		echo -n "Use busybox ${app} instead of the full version? [Y/n]: "
+		read answer
+		case $answer in
+			n|N) echo -n ;;
+			*) rm -fv bin/${app} ;;
+		esac
 	done
 	( 
 		cd bin
-		sh bb-create-symlinks
+		sh bb-create-symlinks 2>/dev/null
 		if [ -f bash ] ; then
 			echo -n "Use bash as the init shell? [y/N]: " ; read answer
 			case $answer in
@@ -321,12 +341,10 @@ else
 fi
 
 if [ "$DISTRO_BINARY_COMPAT" ] ; then
-	pkgx=initrd_progs-$(date "+%Y%m%d")-${DISTRO_FILE_PREFIX}-${DISTRO_VERSION}-${ARCH}.tar.gz
+	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 	rm -f $pkgx
 	tar zcf $pkgx initrd.gz 0initrd/bin
 fi
-
-rm -f cross-compile #comment out to debug
 
 echo
 echo "all done!"

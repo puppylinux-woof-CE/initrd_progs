@@ -2,6 +2,8 @@
 # e3_static
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
+## This will not compile for arm, etc.. ##
+
 . ../func
 . ../build.conf
 
@@ -25,10 +27,19 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
-	make
-	[ "$?" -eq 0 ] || exit_error 1
+	case $ARCH in
+		i?86|x86_64)
+			make
+			[ "$?" -eq 0 ] || exit_error 1
+			;;
+		*)
+			echo "e3 not compatible with $ARCH"
+			echo "creating empty file"
+			touch $SRC
+			echo
+			;;
+	esac
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -

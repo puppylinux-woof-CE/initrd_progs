@@ -24,15 +24,17 @@ esac
 
 build() {
 	cd ${SRC}-${VER}
-	echo $PWD
 	if [ -f ../../cross-compile ] ; then
 		sh ../../cross-compile
+		[ -f $SRC ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		make_build
+		[ -f $SRC ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	[ "$?" -eq 0 ] || exit_error 1
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 	

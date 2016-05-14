@@ -25,30 +25,36 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
+	configure_force_linux_os
+	opts='--prefix=/usr --disable-builddir' #--enable-zlib
+	sed -i -e 's|armv\[2345\]|armv[234567]|' -e 's|armv\[345\]|armv[34567]|' config.sub
+	sed -i 's|.*Linux only, dude.*||' configure
 	if [ -f ../../cross-compile ] ; then
-		sed -i  -e "s|^host=.*|host=${ARCH}-pc-linux|" \
-				-e "s|^target=.*|target=${ARCH}-pc-linux|" configure
-		. ../../cross-compile source 
-		./configure --prefix=/usr --host=${ARCH} #--enable-zlib
-		[ "$?" -eq 0 ] || exit_error 1
+		sh ../../cross-compile ./configure ${opts} --host=${ARCH}
+		[ $? -eq 0 ] || exit_error 1
+		sed -i 's|DOCBOOKTOMAN = .*|DOCBOOKTOMAN = echo|' Makefile
 		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
+		[ -f modprobe ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		compiler_flag
-		./configure --prefix=/usr --host=${host} #--enable-zlib
-		[ "$?" -eq 0 ] || exit_error 1
+		./configure ${opts} --host=${host}
+		[ $? -eq 0 ] || exit_error 1
+		sed -i 's|DOCBOOKTOMAN = .*|DOCBOOKTOMAN = echo|' Makefile
 		make_build
+		[ -f modprobe ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	#[ "$?" -eq 0 ] || exit_error 1 ## builds anyway
-	[ -f build/modprobe ] || exit_error 1 ## real test
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 build/lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 build/modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 build/modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
-	
+
 package() {
 	# add this recipe
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc

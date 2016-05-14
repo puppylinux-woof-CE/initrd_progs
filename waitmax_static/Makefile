@@ -8,14 +8,7 @@ LDFLAGS =
 all: waitmax
 
 waitmax: waitmax.c
-	@if type musl-gcc >/dev/null ; then \
-	    echo "Compiling with musl (please ignore diet-warnings)..." ; \
-	    musl-gcc -static -o waitmax waitmax.c $(CFLAGS) $(LDFLAGS) ; \
-	else \
-	    echo "Compiling with $(CC)..." ; \
-	    $(CC) -s -o waitmax waitmax.c $(CFLAGS) $(LDFLAGS) ; \
-	fi
-	echo "Fine. Typing 'make install' as root now will install into /usr/bin"
+	$(CC) -s -o waitmax waitmax.c $(CFLAGS) $(LDFLAGS)
 
 install:
 	mkdir -p $(DESTDIR)/usr/bin

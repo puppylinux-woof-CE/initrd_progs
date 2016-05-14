@@ -26,34 +26,33 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
+	EXE=util/fusermount
 	conf_opts='--prefix=/usr --disable-lib --disable-shared --enable-static --disable-example'
-	configure_force_linux_os
 	cd ${SRC}-${VER}
+	configure_force_linux_os
 	if [ -f ../../cross-compile ] ; then
-		. ../../cross-compile source
-		./configure ${conf_opts} --host=${ARCH}
+		sh ../../cross-compile ./configure ${conf_opts} --host=${ARCH}
 		[ "$?" -eq 0 ] || exit_error 1
 		sed -i 's|^LIBS =.*|LIBS = -static|' util/Makefile
 		sed -i 's|^LDFLAGS =.*|LDFLAGS = -static|' util/Makefile
 		make clean
 		## https://github.com/pwaller/static-fusermount/blob/master/Dockerfile
-		make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
+		sh ../../cross-compile make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
+		[ -f $EXE ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		compiler_flag
 		./configure ${conf_opts} --host=${host}
 		[ "$?" -eq 0 ] || exit_error 1
-		#make_build
 		make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
+		[ -f $EXE ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	#[ $? -eq 0 ] || exit_error 1
-	# this bugs out but fusermount is built so we carry on
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	EXEC_FM=`find . -type f -name "$EXEC"`
-	install -s -m 0755 $EXEC_FM $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
-	
+
 package() {
 	# add this recipe
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
