@@ -27,10 +27,8 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
 	if [ -f ../../cross-compile ] ; then
-		#export MUSL_INCLUDE=1
 		host=${ARCH}
 		CCOMP='sh ../../cross-compile'
 	else
@@ -92,18 +90,22 @@ build() {
 		sh ../../cross-compile make ${MKFLG} blkid
 		sh ../../cross-compile make ${MKFLG} unshare
 		#sh ../../cross-compile make ${MKFLG} rev
+		[ -f losetup ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		make_build ${MKFLG} blkid
 		make_build ${MKFLG} losetup
 		make_build ${MKFLG} unshare
 		#make_build ${MKFLG} rev
+		[ -f losetup ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	[ $? -eq 0 ] || exit_error 1
-	[ -f losetup ] || exit_error 1
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 

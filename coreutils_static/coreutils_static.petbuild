@@ -25,36 +25,34 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
+	EXE=src/cp
+	opts="--prefix=/usr
+--disable-nls
+--disable-acl
+--disable-libsmack
+--without-selinux
+--without-gmp
+--enable-no-install-program=base32,base64,basename,cat,chcon,chgrp,chmod,chown,chroot,cksum,comm,csplit,cut,date,dd,df,dir,dircolors,dirname,do,echo,env,expand,expr,factor,false,fmt,bold,groups,head,hostid,id,install,join,link,ln,longname,ls,md5sum,mkdir,mkfifo,mknod,mktemp,mv,nice,nl,nohup,nproc,numfmt,od,paste,pathchk,pinky,pr,printenv,printf,ptx,pwd,readlink,realpath,rm,rmdir,runcon,seq,sha1sum,sha224sum,sha256sum,sha384sum,sha512sum,shred,shuf,sleep,sort,split,stat,stdbuf,stty,sum,sync,tac,tail,tee,test,timeout,touch,tr,true,truncate,tsort,tty,uname,unexpand,uniq,unlink,users,vdir,wc,who,whoami,yes
+--enable-install-program=cp"
 	cd ${SRC}-${VER}
 	export FORCE_UNSAFE_CONFIGURE=1
+	configure_force_linux_os
 	if [ -f ../../cross-compile ] ; then
-		export MUSL_INCLUDE=1
-		host=${ARCH}
-		CCOMP='sh ../../cross-compile'
+		../../cross-compile ./configure ${opts} --host=${ARCH}
+		[ $? -eq 0 ] || exit_error 1
+		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
+		[ -f "$EXE" ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		compiler_flag
-	fi
-	configure_force_linux_os
-	${CCOMP} ./configure --prefix=/usr \
-					--disable-nls \
-					--disable-acl \
-					--disable-libsmack \
-					--without-selinux \
-					--without-gmp \
-					--enable-install-program=cp \
-					--host=${host}
-	[ "$?" -eq 0 ] || exit_error 1
-	if [ -f ../../cross-compile ] ; then
-		sed -i  -e 's|^CFLAGS =.*|CFLAGS = -g -Os -static -D_GNU_SOURCE|' \
-				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
-		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
-	else
+		./configure ${opts} --host=${host}
+		[ $? -eq 0 ] || exit_error 1
 		make_build
+		[ -f "$EXE" ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	[ "$?" -eq 0 ] || exit_error 1
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 src/cp $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 

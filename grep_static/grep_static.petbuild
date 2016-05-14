@@ -10,7 +10,7 @@
 URL=http://ftp.gnu.org/gnu/grep/
 SRC=grep
 PKG=grep_static
-VER=2.24
+VER=2.25
 COMP=tar.xz
 DESC=""
 DEPS=
@@ -26,25 +26,25 @@ esac
 
 build() {
 	cd ${SRC}-${VER}
+	EXE=src/grep
+	opts='--prefix=/usr --disable-nls'
 	configure_force_linux_os
 	if [ -f ../../cross-compile ] ; then
-		#export MUSL_INCLUDE=1
-		CCOMP='sh ../../cross-compile'
+		sh ../../cross-compile ./configure ${opts} --host=${ARCH}
+		[ $? -eq 0 ] || exit_error 1
+		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
+		[ -f $EXE ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install2 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	else
 		compiler_flag
-	fi
-	${CCOMP} ./configure --prefix=/usr --disable-nls --host=${ARCH}
-	[ "$?" -eq 0 ] || exit_error 1
-	if [ -f ../../cross-compile ] ; then
-		sed -i  -e "s|^CFLAGS =.*|CFLAGS = -g -Os -static -D_GNU_SOURCE|" \
-				-e 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
-		${CCOMP} make ${MKFLG} LDFLAGS=-static
-	else
+		./configure ${opts} --host=${host}
+		[ $? -eq 0 ] || exit_error 1
 		make_build
+		[ -f $EXE ] || exit_error 1
+		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+		install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	fi
-	[ "$?" -eq 0 ] || exit_error 1
-	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	install -s -m 0755 src/$SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 	

@@ -1,6 +1,6 @@
 #!/bin/sh
 # functions library
-# this is run from  <app>_static
+# this is run from <app>_static/<awk>_static.petbuild
 
 . ../build.conf
 echo
@@ -66,14 +66,21 @@ function exit_error() {
 	exit $@
 }
 
+function install2() {
+	local file="$1" dest="$2"
+	sh ../../cross-compile ${ARCH}-strip --strip-unneeded "$file"
+	chmod +x "$file"
+	cp "$file" "$dest"
+}
+
 ############################################################################
 #					LOCAL MUSL COMPILER (tool chain)
 ############################################################################
 
 function compiler_flag() {
 	. /etc/DISTRO_SPECS
-	MUSL_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$MUSL_GCC" ] ; then
+	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
+	if [ -x "$CCOMP_GCC" ] ; then
 		export CC="musl-gcc -static"
 		if [ "$DISTRO_BINARY_COMPAT" = "slackware" ] ; then
 			case $ARCH in
@@ -89,8 +96,8 @@ function compiler_flag() {
 }
 
 function make_build() {
-	MUSL_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$MUSL_GCC" ] ; then
+	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
+	if [ -x "$CCOMP_GCC" ] ; then
 		make CC="musl-gcc -static"
 	else
 		make CC="gcc --static" ${MKFLG} "$@" ## func

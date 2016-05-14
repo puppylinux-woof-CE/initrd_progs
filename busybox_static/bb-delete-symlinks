@@ -1,7 +1,9 @@
 #!/bin/sh
 
-ls | \
+sdir=$(dirname "$0")
+
+ls "$sdir" | \
 	while read file ; do
-		[ "$(readlink $file)" = "busybox" ] && rm $file
+		[ "$(readlink $sdir/$file)" = "busybox" ] && rm "$sdir/$file"
 	done
 
