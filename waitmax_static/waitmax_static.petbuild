@@ -25,29 +25,21 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
 	cp ../Makefile .
-	if [ -f ../../cross-compile ] ; then
-		sh ../../cross-compile
-		[ -f $SRC ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		make_build
-		[ -f $SRC ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_make
+	abort_if_file_not_found $SRC
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
-	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r $PKG-$VER-$ARCH
 	echo "moved to initrd"

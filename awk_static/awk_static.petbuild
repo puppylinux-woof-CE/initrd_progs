@@ -32,33 +32,23 @@ build() {
 --disable-extensions
 --disable-lint
 --without-readline
+--without-libsigsegv-prefix
 --without-mpfr" #--with-whiny-user-strftime
-	configure_force_linux_os
-	if [ -f ../../cross-compile ] ; then
-		sh ../../cross-compile ./configure ${opts} --host=${ARCH}
-		[ $? -eq 0 ] || exit_error 1
-		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
-		[ -f gawk ] && cp gawk $EXE || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		compiler_flag
-		./configure ${opts} --host=${ARCH} --host=${host}
-		[ $? -eq 0 ] || exit_error 1
-		make_build
-		[ -f gawk ] && cp gawk $EXE || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_configure
+	_make ${MKFLG} LDFLAGS=-static
+	abort_if_file_not_found gawk
+	cp gawk $EXE
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"

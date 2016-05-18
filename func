@@ -1,6 +1,6 @@
 #!/bin/sh
 # functions library
-# this is run from <app>_static/<awk>_static.petbuild
+# this is sourced from <app>_static/<awk>_static.petbuild
 
 . ../build.conf
 echo
@@ -13,6 +13,15 @@ case $ARCH in
 	*)    ARCH=$ARCH ;;
 esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+
+#---------------------------------------------------------
+
+function exit_error() {
+	if [ "$HALT_ERRS" = "1" ] ; then #build.conf
+		echo -n > $MWD/.fatal
+	fi
+	exit $@
+}
 
 function retrieve() {
 	SRCS=${1%% *}
@@ -49,59 +58,92 @@ function extract() {
 	[ -f "$tfile" ] && mv -f ${tfile} ../0sources
 }
 
-function configure_force_linux_os() { #this is inside the source dir
-	#this is to avoid possible problems with the triplet
-	#true for aboriginal linux cross compiler
-	sed -i  -e 's|^build_os=.*|build_os=linux|' \
-			-e 's|^host_os=.*|host_os=linux|' \
-			-e 's|^target_os=.*|target_os=linux|' \
-			-e 's|linux_os=no|linux_os=yes|' \
-			configure
+function abort_if_file_not_found() {
+	[ "$1" ] || exit_error 1
+	for i in "$@" ; do
+		if [ ! -f "$i" ] ; then
+			echo "$i: file does no exist!"
+			exit_error 1
+		fi
+	done
 }
 
-function exit_error() {
-	if [ "$HALT_ERRS" = "1" ] ; then #build.conf
-		echo -n > $MWD/.fatal
+#---------------------------------------------------------
+
+function cross_compile() {
+	#XPATH is set in build.sh
+	export PATH=${XPATH}/bin:$PATH
+	case $1 in
+		"") make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld LDFLAGS=-static ;;
+		*) $@ ;;
+	esac
+}
+
+#this is inside the source dir
+function _configure() {
+	unset host
+	if [ -f configure ] ; then
+		#this is to avoid possible problems with the triplet
+		#true for aboriginal linux cross compiler
+		sed -i  -e 's|^build_os=.*|build_os=linux|' \
+				-e 's|^host_os=.*|host_os=linux|' \
+				-e 's|^target_os=.*|target_os=linux|' \
+				-e 's|linux_os=no|linux_os=yes|' \
+				configure
 	fi
-	exit $@
+	if [ -d "$XPATH" ] ; then
+		CCOMP='cross_compile'
+		host="--host=${ARCH}"
+	fi
+	echo -e "\n--------------------------------"
+	echo -e "${CCOMP} ./configure ${opts} ${host}"
+	echo -e "--------------------------------\n" ; echo
+	${CCOMP} ./configure ${opts} ${host} #opts is set in the calling script
+	[ $? -ne 0 ] && exit_error 1
 }
 
-function install2() {
+#this is inside the source dir
+function _make() {
+	cf="-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+	if [ -f Makefile ] ; then
+		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g" $(find . -type f -name Makefile)
+		echo -e "\n-------------------"
+		grep '^CFLAGS = ' $(find . -type f -name Makefile)
+		echo -e "---------------------"
+	else
+		export CFLAGS="$cf"
+	fi
+	if [ -d "$XPATH" ] ; then
+		[ "$1" != "" -a "$1" != "make" ] && make1=make
+		CCOMP='cross_compile'
+		echo -e "\n-------------------"
+		echo -e "${CCOMP} $make1 $@"
+		echo -e "-------------------\n"
+		${CCOMP} $make1 $@
+	else
+		# system gcc
+		[ "$1" = "make" ] && shift
+		if [ "$1" = "" ] ; then
+			make LDFLAGS=-static CFLAGS=-static
+		else
+			make $@
+		fi
+	fi
+	return $?
+}
+
+#this is inside the source dir
+function _install() {
 	local file="$1" dest="$2"
-	sh ../../cross-compile ${ARCH}-strip --strip-unneeded "$file"
+	#[ -f "$file" ] || exit_error 1
+	if [ -d "$XPATH" ] ; then
+		CCOMP='cross_compile'
+		${CCOMP} ${ARCH}-strip --strip-all "$file" #--strip-unneeded
+	else
+		strip --strip-all "$file"
+	fi
 	chmod +x "$file"
 	cp "$file" "$dest"
-}
-
-############################################################################
-#					LOCAL MUSL COMPILER (tool chain)
-############################################################################
-
-function compiler_flag() {
-	. /etc/DISTRO_SPECS
-	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$CCOMP_GCC" ] ; then
-		export CC="musl-gcc -static"
-		if [ "$DISTRO_BINARY_COMPAT" = "slackware" ] ; then
-			case $ARCH in
-				*64) host=x86_64-slackware-linux ;; #tested in slacko 6.3.0
-				*) host=i486-slackware-linux ;;     #tested in slacko 6.3.0
-			esac
-		else
-			echo "Need core here: ($0) - compiler_flag()"
-		fi
-	else
-		echo "Need core here: ($0) - compiler_flag()"
-	fi
-}
-
-function make_build() {
-	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$CCOMP_GCC" ] ; then
-		make CC="musl-gcc -static"
-	else
-		make CC="gcc --static" ${MKFLG} "$@" ## func
-	fi
 }
 
 ### END ###

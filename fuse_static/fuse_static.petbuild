@@ -27,38 +27,23 @@ esac
 
 build() {
 	EXE=util/fusermount
-	conf_opts='--prefix=/usr --disable-lib --disable-shared --enable-static --disable-example'
+	opts='--prefix=/usr --disable-lib --disable-shared --enable-static --disable-example'
 	cd ${SRC}-${VER}
-	configure_force_linux_os
-	if [ -f ../../cross-compile ] ; then
-		sh ../../cross-compile ./configure ${conf_opts} --host=${ARCH}
-		[ "$?" -eq 0 ] || exit_error 1
-		sed -i 's|^LIBS =.*|LIBS = -static|' util/Makefile
-		sed -i 's|^LDFLAGS =.*|LDFLAGS = -static|' util/Makefile
-		make clean
-		## https://github.com/pwaller/static-fusermount/blob/master/Dockerfile
-		sh ../../cross-compile make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
-		[ -f $EXE ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		compiler_flag
-		./configure ${conf_opts} --host=${host}
-		[ "$?" -eq 0 ] || exit_error 1
-		make ${MKFLG} -C util LDFLAGS="-all-static -Wl,-v -Wl,--strip-all" V=1 fusermount
-		[ -f $EXE ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_configure
+	## https://github.com/pwaller/static-fusermount/blob/master/Dockerfile
+	_make ${MKFLG} -C util LDFLAGS=-all-static V=1 fusermount
+	abort_if_file_not_found $EXE
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $EXE $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"

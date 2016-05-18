@@ -38,44 +38,31 @@ build() {
 	[ -f ../.config ] && cp -a ../.config .
 	#__inline seems to get activated when -std=gnu99 is used, causing havoc
 	sed -i 's,__inline,,' ./scripts/kconfig/zconf.hash.c_shipped
-	if [ -f ../../cross-compile ] ; then
-		if [ -f .config ] ; then
-			${CCOMP} make oldconfig || exit_error 1
-		else
-			${CCOMP} make menuconfig || exit_error 1
-		fi
-		export LDFLAGS="--static"
-		../../cross-compile make ${MKFLAG} oldconfig
-		../../cross-compile make ${MKFLAG} CROSS_COMPILE=${ARCH}-
-	else
-		compiler_flag
-		make oldconfig
-		CFLAGS='-Os -static' HOSTGCC=gcc \
-		CFLAGS_busybox="-Wl,-z,muldefs" make_build
-	fi
-	[ -f busybox ] || exit_error 1
+	[ -d "$XPATH" ] && CRC="CROSS_COMPILE=${ARCH}-"
+	export LDFLAGS="--static"
+	_make ${MKFLAG} ${CRC}
+	abort_if_file_not_found busybox
 	alist=$(./busybox --list 2>/dev/null)
 	if [ "x$alist" != "x" ] ; then
 		alist=$(echo "$alist" | tr '\n' ' ')
-		sed -i -e "s|applet_list=''|applet_list='${alist}'|" \
+		sed -i -e "s|applet_list='.*|applet_list='${alist}'|" \
 			../bb-create-symlinks
 	fi
 	cd -
 }
 
 package() {
-	echo "wait..."
 	# install
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 ${SRC_PKG}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
-	install -m 0644 DOTconfig-static ./${PKG}-${VER}-${ARCH}/usr/share/doc
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
+	install -m 0644 DOTconfig-static ./${PKG}-${VER}-${ARCH}/build
 	# move, don't package
-	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../00_${ARCH}
 	rm -r ${SRC_PKG}-${VER}
 	rm -r ${PKG}-${VER}-$ARCH
 	echo "moved to initrd"

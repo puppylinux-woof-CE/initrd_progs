@@ -8,7 +8,7 @@ LDFLAGS =
 all: waitmax
 
 waitmax: waitmax.c
-	$(CC) -s -o waitmax waitmax.c $(CFLAGS) $(LDFLAGS)
+	$(CC) -s -o waitmax $(CFLAGS) $(LDFLAGS) waitmax.c
 
 install:
 	mkdir -p $(DESTDIR)/usr/bin

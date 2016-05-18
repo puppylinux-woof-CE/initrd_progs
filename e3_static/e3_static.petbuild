@@ -31,7 +31,7 @@ build() {
 	case $ARCH in
 		i?86|x86_64)
 			make
-			[ "$?" -eq 0 ] || exit_error 1
+			abort_if_file_not_found $SRC
 			;;
 		*)
 			echo "e3 not compatible with $ARCH"
@@ -47,10 +47,10 @@ build() {
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./$PKG-$VER-$ARCH/usr/share/doc
-	cat ${PKG}.petbuild > ./$PKG-$VER-$ARCH/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r $PKG-$VER-$ARCH
 	echo "moved to initrd"
