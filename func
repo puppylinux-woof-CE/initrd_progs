@@ -14,6 +14,11 @@ case $ARCH in
 esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
+if [ -d "$XPATH" ] ; then
+	#XPATH is set in build.sh
+	export PATH=${XPATH}/bin:$PATH # _configure _make _install
+fi
+
 #---------------------------------------------------------
 
 function exit_error() {
@@ -24,19 +29,22 @@ function exit_error() {
 }
 
 function retrieve() {
-	SRCS=${1%% *}
-	WC=`echo "$1" | wc -w`
-	[ "$WC" -eq 2 ] && CERT=${1##* }
-	if [ -f ../0sources/${SRCS} ] ; then
+	local SOURCE=${1}
+	local FILE=$SOURCE
+	case $SOURCE in http*|ftp*)
+		local URL=${SOURCE%/*}
+		local FILE=${SOURCE##*/}
+	esac
+	if [ -f ../0sources/${FILE} ] ; then
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
-		cp -a ../0sources/${SRCS} .
+		cp -a ../0sources/${FILE} .
 	else
-		wget -c --no-check-certificate ${URL}/${SRCS} $CERT
+		wget -c --no-check-certificate ${URL}/${FILE}
 		if [ $? -ne 0 ] ; then
-			rm -f ${SRCS}
+			rm -f ${FILE}
 			exit_error 1
 		fi
-		mv -f ${SRCS} ../0sources
+		mv -f ${FILE} ../0sources
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
 	fi
 }
@@ -70,13 +78,12 @@ function abort_if_file_not_found() {
 
 #---------------------------------------------------------
 
-function cross_compile() {
-	#XPATH is set in build.sh
-	export PATH=${XPATH}/bin:$PATH
-	case $1 in
-		"") make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld LDFLAGS=-static ;;
-		*) $@ ;;
-	esac
+function hl_echo() {
+	echo
+	echo '------------------------------'
+	echo "$@"
+	echo '------------------------------'
+	echo
 }
 
 #this is inside the source dir
@@ -92,13 +99,11 @@ function _configure() {
 				configure
 	fi
 	if [ -d "$XPATH" ] ; then
-		CCOMP='cross_compile'
+		echo "PATH: $PATH"
 		host="--host=${ARCH}"
 	fi
-	echo -e "\n--------------------------------"
-	echo -e "${CCOMP} ./configure ${opts} ${host}"
-	echo -e "--------------------------------\n" ; echo
-	${CCOMP} ./configure ${opts} ${host} #opts is set in the calling script
+	hl_echo "./configure ${opts} ${host}"
+	./configure ${opts} ${host} #opts is set in the calling script
 	[ $? -ne 0 ] && exit_error 1
 }
 
@@ -106,28 +111,25 @@ function _configure() {
 function _make() {
 	cf="-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
 	if [ -f Makefile ] ; then
-		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g" $(find . -type f -name Makefile)
-		echo -e "\n-------------------"
-		grep '^CFLAGS = ' $(find . -type f -name Makefile)
-		echo -e "---------------------"
+		makefiles=$(find . -type f -name Makefile | tr '\n' ' ')
+		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g"  ${makefiles}
+		hl_echo "$(grep '^CFLAGS = ' $makefiles)"
 	else
 		export CFLAGS="$cf"
 	fi
-	if [ -d "$XPATH" ] ; then
-		[ "$1" != "" -a "$1" != "make" ] && make1=make
-		CCOMP='cross_compile'
-		echo -e "\n-------------------"
-		echo -e "${CCOMP} $make1 $@"
-		echo -e "-------------------\n"
-		${CCOMP} $make1 $@
-	else
-		# system gcc
-		[ "$1" = "make" ] && shift
-		if [ "$1" = "" ] ; then
+	[ "$1" = "make" ] && shift
+	if [ "$1" = "" ] ; then #no args
+		if [ -d "$XPATH" ] ; then #musl
+			echo "PATH: $PATH"
+			hl_echo "make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
+			make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static
+		else # system gcc
+			hl_echo "make LDFLAGS=-static CFLAGS=-static"
 			make LDFLAGS=-static CFLAGS=-static
-		else
-			make $@
 		fi
+	else
+		hl_echo "make $@"
+		make $@
 	fi
 	return $?
 }
@@ -137,8 +139,7 @@ function _install() {
 	local file="$1" dest="$2"
 	#[ -f "$file" ] || exit_error 1
 	if [ -d "$XPATH" ] ; then
-		CCOMP='cross_compile'
-		${CCOMP} ${ARCH}-strip --strip-all "$file" #--strip-unneeded
+		${ARCH}-strip --strip-all "$file" #--strip-unneeded
 	else
 		strip --strip-all "$file"
 	fi
