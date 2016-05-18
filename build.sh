@@ -333,6 +333,7 @@ if [ "$INITRD_GZ" = "1" ] ; then
 		cp -av --remove-destination 00_${ARCH}/bin/* ZZ_initrd-expanded/bin
 	else
 		for PROG in ${INITRD_PROGS} ; do
+			case $PROG in ""|'#'*) continue ;; esac
 			if [ -f 00_${ARCH}/bin/${PROG} ] ; then
 				cp -av --remove-destination \
 					00_${ARCH}/bin/${PROG} ZZ_initrd-expanded/bin
