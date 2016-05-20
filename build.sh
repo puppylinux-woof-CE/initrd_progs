@@ -328,6 +328,7 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	tar --directory=ZZ_initrd-expanded --strip=1 -zxf ${initrdtree}
 	tar --directory=ZZ_initrd-expanded -zxf 0initrd/dev.tar.gz
 	tar --directory=ZZ_initrd-expanded -zxf 0initrd/lib.tar.gz
+	tar --directory=ZZ_initrd-expanded -zxf 0initrd/terminfo.tar.gz
 
 	if [ "$COPY_ALL_BINARIES" = "1" ] ; then
 		cp -av --remove-destination 00_${ARCH}/bin/* ZZ_initrd-expanded/bin
