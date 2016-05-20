@@ -383,6 +383,9 @@ if [ "$INITRD_GZ" = "1" ] ; then
 		. ${DS}
 	fi
 	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
+	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
+	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
+	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
@@ -392,6 +395,7 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	####
 	find . | cpio -o -H newc > ../initrd
 	cd ..
+	[ -f initrd.gz ] && rm -fv initrd.gz
 	gzip -f initrd
 	if [ $? -eq 0 ] ; then
 		echo

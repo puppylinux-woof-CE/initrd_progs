@@ -1,0 +1,22 @@
+#!/bin/ash
+
+bb=busybox
+
+if [ "$1" = "" ] ; then
+	echo "Usage: guess_fstype device"
+	exit
+fi
+
+if [ ! -b "$1" ] ; then
+	echo unknown
+	exit 1
+else
+	res=$(blkid "$1" | $bb sed -e 's|.*TYPE="||' -e 's|".*||')
+	if [ "$res" = "" ] ; then
+		echo unknown
+		exit 1
+	else
+		echo "$res"
+	fi
+fi
+

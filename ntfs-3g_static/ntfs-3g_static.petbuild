@@ -29,8 +29,8 @@ build() {
 	# diff -Naur ntfs-3g_ntfsprogs-2016.2.22 ntfs-3g_ntfsprogs-2016.2.22-patched > libfuse-musl.patch
 	patch -N -p1 < ../libfuse-musl.patch
 	opts="--prefix=/usr --disable-library --disable-ntfsprogs --enable-really-static --enable-mount-helper"
-	#_configure
-	#_make ${MKFLG} LDFLAGS=-static
+	_configure
+	_make ${MKFLG} LDFLAGS=-static
 	EXE=`find . -type f -name ${PKG%_*}`
 	abort_if_file_not_found $EXE
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
