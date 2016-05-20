@@ -66,6 +66,20 @@ while [ "$1" ] ; do
 			help_msg
 			exit
 			;;
+		-clean)
+			echo -e "\nWe're going to remove some unneeded files"
+			echo -e "and move some generated dirs to ../initrd_temp"
+			echo -e "Press P and hit enter to proceed, any other combination to cancel.."
+			read zz
+			case $zz in p|P)
+				mkdir -p ../initrd_temp
+				mv -f 00_* ../initrd_temp
+				mv -f 0sources ../initrd_temp
+				mv -f cross-compiler* ../initrd_temp
+				rm -rf initrd.gz initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler*
+			esac
+			exit
+			;;
 		*)
 			echo "Unrecognized option: $1"
 			shift
