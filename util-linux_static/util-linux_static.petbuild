@@ -28,93 +28,40 @@ esac
 
 build() {
 	cd ${SRC}-${VER}
-	if [ -f ../../cross-compile ] ; then
-		host=${ARCH}
-		CCOMP='sh ../../cross-compile'
-	else
-		compiler_flag
-	fi
-	configure_force_linux_os #linux_os=no
 	#--enable-static-programs=losetup,mount,umount,fdisk,sfdisk,blkid,nsenter,unshare
-	${CCOMP} ./configure --prefix=/usr \
-				--enable-static-programs=losetup,blkid,unshare \
-				--host=${host} \
-				--disable-shared \
-				--disable-nls \
-				--without-ncurses \
-				--disable-libuuid \
-				--disable-libmount \
-				--disable-mount \
-				--disable-fsck \
-				--disable-partx \
-				--disable-uuidd \
-				--disable-mountpoint \
-				--disable-fallocate \
-				--disable-nsenter \
-				--disable-setpriv \
-				--disable-eject \
-				--disable-agetty \
-				--disable-cramfs \
-				--disable-bfs \
-				--disable-fdformat \
-				--disable-hwclock \
-				--disable-wdctl \
-				--disable-switch_root \
-				--disable-pivot_root \
-				--disable-kill \
-				--disable-utmpdump \
-				--disable-raw \
-				--disable-rename \
-				--disable-chfn-chsh-password \
-				--disable-chsh-only-listed \
-				--disable-login \
-				--disable-sulogin \
-				--disable-su \
-				--disable-runuser \
-				--disable-ul \
-				--disable-more \
-				--disable-pg \
-				--disable-setterm \
-				--disable-schedutils \
-				--disable-wall \
-				--disable-bash-completion \
-				--disable-pg-bell \
-				--disable-use-tty-group \
-				--disable-makeinstall-chown \
-				--disable-makeinstall-setuid \
-				--without-ncurses --without-tinfo --without-python --without-selinux
-	[ "$?" -eq 0 ] || exit_error 1
+	opts="--prefix=/usr --enable-static-programs=losetup,blkid,unshare
+--disable-shared --disable-nls --without-ncurses --disable-libuuid
+--disable-libmount --disable-mount --disable-fsck --disable-partx
+--disable-uuidd --disable-mountpoint --disable-fallocate
+--disable-nsenter --disable-setpriv --disable-eject --disable-agetty
+--disable-cramfs --disable-bfs --disable-fdformat --disable-hwclock
+--disable-wdctl --disable-switch_root --disable-pivot_root
+--disable-kill --disable-utmpdump --disable-raw --disable-rename
+--disable-chfn-chsh-password --disable-chsh-only-listed
+--disable-login --disable-sulogin --disable-su --disable-runuser
+--disable-ul --disable-more --disable-pg --disable-setterm
+--disable-schedutils --disable-wall --disable-bash-completion
+--disable-pg-bell --disable-use-tty-group --disable-makeinstall-chown
+--disable-makeinstall-setuid --without-tinfo --without-python --without-selinux"
+	_configure
 	sed -i 's|^LDFLAGS =.*|LDFLAGS = -all-static|' Makefile
-	if [ -f ../../cross-compile ] ; then
-		sh ../../cross-compile make ${MKFLG} losetup
-		sh ../../cross-compile make ${MKFLG} blkid
-		sh ../../cross-compile make ${MKFLG} unshare
-		#sh ../../cross-compile make ${MKFLG} rev
-		[ -f losetup ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		make_build ${MKFLG} blkid
-		make_build ${MKFLG} losetup
-		make_build ${MKFLG} unshare
-		#make_build ${MKFLG} rev
-		[ -f losetup ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 blkid $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 losetup $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 unshare $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_make ${MKFLG} losetup
+	_make ${MKFLG} blkid
+	_make ${MKFLG} unshare
+	abort_if_file_not_found losetup
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install blkid $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install losetup $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install unshare $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"

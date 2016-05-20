@@ -7,11 +7,11 @@
 
 # GOES TO INITRD
 
-URL=http://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v1.42.13
+URL=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.43/
 SRC=e2fsprogs
 PKG=e2fsprogs_static
-VER=1.42.13
-COMP=tar.gz
+VER=1.43
+COMP=tar.xz
 DESC=""
 DEPS=
 CAT=BuildingBlock
@@ -25,46 +25,40 @@ esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
 build() {
-	# since not X compiling forget build triplet
 	cd ${SRC}-${VER}
-	if [ -f ../../cross-compile ] ; then
-		configure_force_linux_os
-		sh ../../cross-compile \
-		./configure --prefix=/usr --disable-nls \
-		--disable-elf-shlibs --disable-bsd-shlibs --disable-rpath --host=${ARCH}
-		[ $? -eq 0 ] || exit_error 1
-		sed -i -e 's|.so$|.a|' -e 's|.so |.a |' $(find . -type f -name Makefile)
-		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
-	else
-		compiler_flag
-		./configure --prefix=/usr --disable-nls \
-		--disable-elf-shlibs --disable-bsd-shlibs --disable-rpath --host=${ARCH}
-		[ $? -eq 0 ] || exit_error 1
-		make_build
-	fi
+	opts='--prefix=/usr
+--disable-nls
+--disable-elf-shlibs
+--disable-bsd-shlibs
+--disable-rpath
+--disable-debugfs       disable support of debugfs program
+--disable-imager        disable support of e2image program
+--disable-defrag        disable support of e4defrag program
+--disable-tls           disable use of thread local support
+--disable-uuidd         disable building the uuid daemon
+--disable-nls
+'
+	opts=$(echo "$opts" | sed 's| .*||')
+	_configure
+	sed -i -e 's|.so$|.a|' -e 's|.so |.a |' $(find . -type f -name Makefile)
+	_make ${MKFLG} LDFLAGS=-static
 	EXEC_E2=`find . -type f -name 'e2fsck'`
 	EXEC_FS=`find . -type f -name 'fsck'`
 	EXEC_RS=`find . -type f -name 'resize2fs'`
-	[ -f $EXEC_E2 ] || exit_error 1
+	abort_if_file_not_found $EXEC_E2 $EXEC_FS $EXEC_RS
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	if [ -f ../../cross-compile ] ; then
-		install2 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		install -s -m 0755 $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_install $EXEC_E2 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $EXEC_FS $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $EXEC_RS $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../0initrd
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r ${PKG}-${VER}-${ARCH}
 	echo "moved to initrd"

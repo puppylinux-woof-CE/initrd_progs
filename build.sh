@@ -1,14 +1,77 @@
 #!/bin/bash
-# packages can be built individually if you wish
 
 . ./build.conf && export MKFLG
 
 export MWD=`pwd`
 
+ARCH_LIST="default i486 x86_64 armv4l armv6l"
+ARCH_LIST_EX="i486 i586 i686 x86_64 armv4l armv4tl armv5l armv6l m68k mips mips64 mipsel powerpc powerpc-440fp sh2eb sh2elf sh4 sparc"
+
 if ! which make &>/dev/null ; then
 	echo "It looks like development tools are not installed.."
 	echo "Press enter to continue, CTRL-C to cancel" ; read zzz
 fi
+
+help_msg() {
+	echo "Build static apps in the queue defined in build.conf
+Usage:
+  $0 [options]
+
+  Options:
+  -pkg pkg    : compile specific pkg only
+  -all        : force building all *_static pkgs
+  -copyall    : use all generated binaries to create initrd.gz
+                otherwise only the ones specified in
+                INITRD_PROGS='..' in build.conf
+  -arch target: compile for target arch
+  -sysgcc     : use system gcc
+  -help       : show help and exit
+
+  Valid <targets> for -arch:
+      $ARCH_LIST_EX
+
+  The most relevant <targets> for Puppy are:
+      ${ARCH_LIST#default }
+
+  Note that one target not yet supported by musl is aarch64 (arm64)
+"
+}
+
+while [ "$1" ] ; do
+	case $1 in
+		-l|-sysgcc)
+			USE_LOCAL_GCC=1
+			which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
+			shift
+			;;
+		-all)
+			FORCE_BUILD_ALL=1
+			shift
+			;;
+		-copyall)
+			COPY_ALL_BINARIES=1
+			shift
+			;;
+		-pkg)
+			[ "$2" = "" ] && { echo "Specify a pkg to compile" ; exit 1; }
+			BUILD_PKG="$2"
+			shift 2
+			;;
+		-arch)
+			[ "$2" = "" ] && { echo "Specify a target arch" ; exit 1; }
+			TARGET_ARCH="$2"
+			shift 2
+			;;
+		-h|-help|--help)
+			help_msg
+			exit
+			;;
+		*)
+			echo "Unrecognized option: $1"
+			shift
+			;;
+	esac
+done
 
 ARCH=`uname -m`
 case $ARCH in
@@ -21,94 +84,84 @@ esac
 #							MAIN
 ###################################################################
 
-mkdir -p 0initrd/bin 0logs 0sources
-CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
-
-case $1 in
-	l|local)
-		CCOMP_GCC="$(whereis musl-gcc 2>/dev/null | head -1 | sed 's|.* ||')"
-		if [ -f "$CCOMP_GCC" ] ; then
-			chmod +x $CCOMP_GCC
-		else
-			echo "Need musl-gcc"
-			exit 1
-		fi
-		;;
-	a|aboriginal)
-		[ -f "$CCOMP_GCC" ] && chmod -x $CCOMP_GCC
-		;;
-esac
-
-if [ -x "$CCOMP_GCC" ] ; then
+if [ "$USE_LOCAL_GCC" = "1" ] ; then
 	echo
-	echo "* Using system's musl-gcc. If you want to download and use "
-	echo "* a recent cross compiler from Aboriginal Linux, then:"
-	echo " chmod -x $CCOMP_GCC "
+	echo "* Using system gcc"
 	echo
-	echo "Type A and hit enter to use the aboriginal linux stuff"
-	echo -n "Press enter to continue or CTRL-C to cancel... " ; read zzz
-	case $zzz in a|A)
-		chmod -x "$CCOMP_GCC"
-		exec "$0"
-	esac
-	rm -f cross-compile
 else
 
 	#############################
 	##     aboriginal linux     #
 	#############################
 	case $ARCH in
-		i?86|x86_64) ok=1 ;;
+		i?86) ARCH=i486 ;;
+		x86_64) echo -n ;;
 		*)
-			echo "*** The cross-compilers from aboriginal linux"
-			echo "*** work in x86 systems only, I guess."
-			echo "*** Exiting..."
+			echo -e "*** The cross-compilers from aboriginal linux"
+			echo -e "*** work in x86 systems only, I guess."
+			echo -e "\n* Run $0 -sysgcc to use the system gcc ... "
+			echo -e "\n*** Exiting..."
 			exit 1
 	esac
 
 	#--------------------------------------------------
 	#             SELECT TARGET ARCH
 	#--------------------------------------------------
-	ARCH_LIST="default i486 x86_64 armv4 armv6l powerpc"
-	echo
-	echo "We're going to compile apps for the init ram disk"
-	echo "Select the arch you want to compile to"
-	echo
-	x=1
-	for a in $ARCH_LIST ; do
-		case $a in
-			default) echo "	${x}) default [${ARCH}]" ;;
-			*) echo "	${x}) $a" ;;
-		esac
-		let x++
-	done
-	echo "	*) default [${ARCH}]"
-	echo
-	echo -n "Enter your choice: " ; read choice
-	x=1
-	for a in $ARCH_LIST ; do
-		if [ "$x" = "$choice" ] ; then
-			selected_arch=$a
-			break
+	if [ "$TARGET_ARCH" != "" ] ; then
+		for a in $ARCH_LIST ; do
+			if [ "$TARGET_ARCH" = "$a" ] ; then
+				VALID_TARGET_ARCH=1
+				break
+			fi
+		done
+		if [ "$VALID_TARGET_ARCH" = "" ] ; then
+			echo "Invalid target arch: $TARGET_ARCH"
+			exit 1
+		else
+			[ "$TARGET_ARCH" != "default" ] && ARCH=${TARGET_ARCH}
 		fi
-		let x++
-	done
-	#-
-	case $selected_arch in
-		default|"")ok=1 ;;
-		*)
-			case $ARCH in i?86)
-				case $selected_arch in *64)
-					echo
-					echo "*** Trying to compile for a 64bit arch in a 32bit system?"
-					echo "*** That's not possible.. exiting.."
-					exit 1
-				esac
+	fi
+
+	if [ "$VALID_TARGET_ARCH" = "" ] ; then
+		echo
+		echo "We're going to compile apps for the init ram disk"
+		echo "Select the arch you want to compile to"
+		echo
+		x=1
+		for a in $ARCH_LIST ; do
+			case $a in
+				default) echo "	${x}) default [${ARCH}]" ;;
+				*) echo "	${x}) $a" ;;
 			esac
-			ARCH=$selected_arch
-			;;
-	esac
-	
+			let x++
+		done
+		echo "	*) default [${ARCH}]"
+		echo
+		echo -n "Enter your choice: " ; read choice
+		x=1
+		for a in $ARCH_LIST ; do
+			if [ "$x" = "$choice" ] ; then
+				selected_arch=$a
+				break
+			fi
+			let x++
+		done
+		#-
+		case $selected_arch in
+			default|"")ok=1 ;;
+			*)
+				case $ARCH in i?86)
+					case $selected_arch in *64)
+						echo
+						echo "*** Trying to compile for a 64bit arch in a 32bit system?"
+						echo "*** That's not possible.. exiting.."
+						exit 1
+					esac
+				esac
+				ARCH=$selected_arch
+				;;
+		esac
+	fi
 	echo
 	echo "OK: $ARCH"
 	sleep 1.5
@@ -146,42 +199,18 @@ else
 	#-------------------------------------------------------------
 
 	[ ! -d "$CCOMP_DIR" ] && { echo "$CCOMP_DIR not found"; exit 1; }
-	#export FCCOMP_DIR=$PWD/cross-compiler-${ARCH}
-	#export CCOMP_TRIPLET=$(find "${FCCOMP_DIR}" -maxdepth 1 -type d -name '*unknown-linux*')
-	#export TRIPLET=${CCOMP_TRIPLET##*/}
-	#find ${FCCOMP_DIR}/${TRIPLET}/bin | while read filez ; do
-	#	[ ! -f "$filez" ] && continue
-	#	name=${filez##*/}
-	#	symlink=${FCCOMP_DIR}/bin/${TRIPLET}-${name}
-	#	ln -fv $filez $symlink &>/dev/null
-	#done
 	cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
 	echo
 	echo "Using cross compiler from Aboriginal Linux"
 	echo
-	export OVERRIDE_ARCH=${ARCH}
-	echo '#!/bin/sh
-XPATH='${PWD}/${CCOMP_DIR}'
-ARCH='${ARCH}'
-#TRIPLET='${TRIPLET}'
-if [ "$CCOMP_INCLUDE" ] || [ "$CCOMP_INCLUDE_ONLY" ] ; then
-	export C_INCLUDE_PATH=${XPATH}/include:${C_INCLUDE_PATH}
-	export CPLUS_INCLUDE_PATH=${XPATH}/include:${CPLUS_INCLUDE_PATH}
-fi
-if [ ! "$CCOMP_INCLUDE_ONLY" ] ; then
-	export LIBRARY_PATH=${LIB_PATH}${LIBRARY_PATH}
-	export LD_LIBRARY_PATH=${LIB_PATH}${LD_LIBRARY_PATH}
-	export PATH=${BIN_PATH}${XPATH}/bin:$PATH
-fi
-case $1 in
-	source) ok=1 ;;
-	"") make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld LDFLAGS=-static ;;
-	*) exec "$@" ;;
-esac' > cross-compile
-chmod +x cross-compile
+	export OVERRIDE_ARCH=${ARCH}     # = cross compiling
+	export XPATH=${PWD}/${CCOMP_DIR} # = cross compiling
+	# see ./func
 fi
 
-#############
+#----------------------------------------------
+mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
+#----------------------------------------------
 
 function check_bin() {
 	local init_pkg=$1
@@ -196,7 +225,7 @@ function check_bin() {
 		*) static_bins=${init_pkg%_*} ;;
 	esac
 	for sbin in ${static_bins} ; do
-		ls ./0initrd/bin | grep -q "^${sbin}" || return 1
+		ls ./00_${ARCH}/bin | grep -q "^${sbin}" || return 1
 	done
 }
 
@@ -211,9 +240,11 @@ build_pkgs() {
 		echo
 	fi
 	sleep 1
-	#ex: export ZINITRD=waitmax
-	[ "$ZINITRD" ] && INITRD="$ZINITRD"
-	for init_pkg in ${INITRD} ; do
+	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
+	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
+		PACKAGES=$(find . -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+	fi
+	for init_pkg in ${PACKAGES} ; do
 		unset BIN_PATH LIB_PATH CCOMP_INCLUDE CCOMP_INCLUDE_ONLY
 		if [ -f .fatal ] ; then
 			echo "Exiting.." ; rm -f .fatal
@@ -236,8 +267,9 @@ build_pkgs() {
 			echo
 			echo "building $init_pkg"
 		fi
-		sleep 1 
-		sh ${init_pkg}.petbuild 2>&1 | tee ../0logs/${init_pkg}build.log
+		sleep 1
+		mkdir -p ../00_${ARCH}/log
+		sh ${init_pkg}.petbuild 2>&1 | tee ../00_${ARCH}/log/${init_pkg}build.log
 		if [ "$?" -eq 1 ];then 
 			echo "$pkg build failure"
 			case $HALT_ERRS in
@@ -255,16 +287,32 @@ build_pkgs() {
 }
 
 build_pkgs
+cd $MWD
 
-rm -f cross-compile .fatal #comment out to debug
+rm -f .fatal #comment out to debug
 
 [ "$DLD_ONLY" = "1" ] && exit
+
+suspicious=$(
+	ls 00_${ARCH}/bin/* | \
+		while read bin ; do file $bin ; done | \
+			grep -E 'dynamically|shared'
+)
+if [ "$suspicious" ] ; then
+	echo
+	echo "These files don't look good:"
+	echo "$suspicious"
+	echo
+	echo -n "Press enter to continue, CTRL-C to end here.." ; read zzz
+fi
 
 #----------------------------------------------------
 #            create initial ramdisk
 #----------------------------------------------------
 
 if [ "$INITRD_GZ" = "1" ] ; then
+	echo
+	echo -n "Press enter to create initrd.gz, CTRL-C to end here.." ; read zzz
 	echo
 	echo "============================================"
 	echo "Now creating the initial ramdisk (initrd.gz) (for 'huge' kernels)"
@@ -280,7 +328,23 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	tar --directory=ZZ_initrd-expanded --strip=1 -zxf ${initrdtree}
 	tar --directory=ZZ_initrd-expanded -zxf 0initrd/dev.tar.gz
 	tar --directory=ZZ_initrd-expanded -zxf 0initrd/lib.tar.gz
-	cp -a --remove-destination 0initrd/bin/* ZZ_initrd-expanded/bin
+	tar --directory=ZZ_initrd-expanded -zxf 0initrd/terminfo.tar.gz
+
+	if [ "$COPY_ALL_BINARIES" = "1" ] ; then
+		cp -av --remove-destination 00_${ARCH}/bin/* ZZ_initrd-expanded/bin
+	else
+		for PROG in ${INITRD_PROGS} ; do
+			case $PROG in ""|'#'*) continue ;; esac
+			if [ -f 00_${ARCH}/bin/${PROG} ] ; then
+				cp -av --remove-destination \
+					00_${ARCH}/bin/${PROG} ZZ_initrd-expanded/bin
+			else
+				echo "WARNING: 00_${ARCH}/bin/${PROG} not found"
+			fi
+		done
+	fi
+
+	echo
 	rm -f ZZ_initrd-expanded/bin/readme
 	cd ZZ_initrd-expanded
 	for app in awk sed ; do
@@ -320,14 +384,19 @@ if [ "$INITRD_GZ" = "1" ] ; then
 		. ${DS}
 	fi
 	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
+	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
+	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
+	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
-	echo -n "Press ENTER to create initrd.gz ..." ; read zzz
+	echo
+	echo -n "Press ENTER to generate initrd.gz ..." ; read zzz
 	echo
 	####
 	find . | cpio -o -H newc > ../initrd
 	cd ..
+	[ -f initrd.gz ] && rm -fv initrd.gz
 	gzip -f initrd
 	if [ $? -eq 0 ] ; then
 		echo
@@ -343,10 +412,14 @@ fi
 if [ "$DISTRO_BINARY_COMPAT" ] ; then
 	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 	rm -f $pkgx
-	tar zcf $pkgx initrd.gz 0initrd/bin
+	tar zcf $pkgx initrd.gz 00_${ARCH}
 fi
 
 echo
-echo "all done!"
+echo " - Output files -"
+echo "initrd.gz: use it in a frugall install for example"
+echo "$pkgx: to store or distribute"
+echo
+echo "Finished."
 
 ### END ###

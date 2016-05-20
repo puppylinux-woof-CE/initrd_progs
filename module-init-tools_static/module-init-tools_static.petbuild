@@ -26,41 +26,26 @@ esac
 
 build() {
 	cd ${SRC}-${VER}
-	configure_force_linux_os
 	opts='--prefix=/usr --disable-builddir' #--enable-zlib
 	sed -i -e 's|armv\[2345\]|armv[234567]|' -e 's|armv\[345\]|armv[34567]|' config.sub
 	sed -i 's|.*Linux only, dude.*||' configure
-	if [ -f ../../cross-compile ] ; then
-		sh ../../cross-compile ./configure ${opts} --host=${ARCH}
-		[ $? -eq 0 ] || exit_error 1
-		sed -i 's|DOCBOOKTOMAN = .*|DOCBOOKTOMAN = echo|' Makefile
-		sh ../../cross-compile make ${MKFLG} LDFLAGS=-static
-		[ -f modprobe ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
-		install2 modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
-	else
-		compiler_flag
-		./configure ${opts} --host=${host}
-		[ $? -eq 0 ] || exit_error 1
-		sed -i 's|DOCBOOKTOMAN = .*|DOCBOOKTOMAN = echo|' Makefile
-		make_build
-		[ -f modprobe ] || exit_error 1
-		install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
-		install -s -m 0755 modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
-	fi
+	_configure
+	sed -i 's|DOCBOOKTOMAN = .*|DOCBOOKTOMAN = echo|' Makefile
+	_make ${MKFLG} LDFLAGS=-static
+	abort_if_file_not_found lsmod modinfo modprobe
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install lsmod $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install modinfo $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install modprobe $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 }
 
 package() {
 	# add this recipe
-	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/usr/share/doc
-	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/usr/share/doc/$PKG-build-recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
 	# move, don't package
-	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../0initrd
+	cp -a --remove-destination ./$PKG-$VER-$ARCH/* ../00_${ARCH}
 	rm -r ${SRC}-${VER}
 	rm -r $PKG-$VER-$ARCH
 	echo "moved to initrd"

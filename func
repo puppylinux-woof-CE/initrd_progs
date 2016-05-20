@@ -1,6 +1,6 @@
 #!/bin/sh
 # functions library
-# this is run from <app>_static/<awk>_static.petbuild
+# this is sourced from <app>_static/<awk>_static.petbuild
 
 . ../build.conf
 echo
@@ -14,20 +14,37 @@ case $ARCH in
 esac
 [ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 
+if [ -d "$XPATH" ] ; then
+	#XPATH is set in build.sh
+	export PATH=${XPATH}/bin:$PATH # _configure _make _install
+fi
+
+#---------------------------------------------------------
+
+function exit_error() {
+	if [ "$HALT_ERRS" = "1" ] ; then #build.conf
+		echo -n > $MWD/.fatal
+	fi
+	exit $@
+}
+
 function retrieve() {
-	SRCS=${1%% *}
-	WC=`echo "$1" | wc -w`
-	[ "$WC" -eq 2 ] && CERT=${1##* }
-	if [ -f ../0sources/${SRCS} ] ; then
+	local SOURCE=${1}
+	local FILE=$SOURCE
+	case $SOURCE in http*|ftp*)
+		local URL=${SOURCE%/*}
+		local FILE=${SOURCE##*/}
+	esac
+	if [ -f ../0sources/${FILE} ] ; then
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
-		cp -a ../0sources/${SRCS} .
+		cp -a ../0sources/${FILE} .
 	else
-		wget -c --no-check-certificate ${URL}/${SRCS} $CERT
+		wget -c --no-check-certificate ${URL}/${FILE}
 		if [ $? -ne 0 ] ; then
-			rm -f ${SRCS}
+			rm -f ${FILE}
 			exit_error 1
 		fi
-		mv -f ${SRCS} ../0sources
+		mv -f ${FILE} ../0sources
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
 	fi
 }
@@ -49,59 +66,85 @@ function extract() {
 	[ -f "$tfile" ] && mv -f ${tfile} ../0sources
 }
 
-function configure_force_linux_os() { #this is inside the source dir
-	#this is to avoid possible problems with the triplet
-	#true for aboriginal linux cross compiler
-	sed -i  -e 's|^build_os=.*|build_os=linux|' \
-			-e 's|^host_os=.*|host_os=linux|' \
-			-e 's|^target_os=.*|target_os=linux|' \
-			-e 's|linux_os=no|linux_os=yes|' \
-			configure
+function abort_if_file_not_found() {
+	[ "$1" ] || exit_error 1
+	for i in "$@" ; do
+		if [ ! -f "$i" ] ; then
+			echo "$i: file does no exist!"
+			exit_error 1
+		fi
+	done
 }
 
-function exit_error() {
-	if [ "$HALT_ERRS" = "1" ] ; then #build.conf
-		echo -n > $MWD/.fatal
+#---------------------------------------------------------
+
+function hl_echo() {
+	echo
+	echo '------------------------------'
+	echo "$@"
+	echo '------------------------------'
+	echo
+}
+
+#this is inside the source dir
+function _configure() {
+	unset host
+	if [ -f configure ] ; then
+		#this is to avoid possible problems with the triplet
+		#true for aboriginal linux cross compiler
+		sed -i  -e 's|^build_os=.*|build_os=linux|' \
+				-e 's|^host_os=.*|host_os=linux|' \
+				-e 's|^target_os=.*|target_os=linux|' \
+				-e 's|linux_os=no|linux_os=yes|' \
+				configure
 	fi
-	exit $@
+	if [ -d "$XPATH" ] ; then
+		echo "PATH: $PATH"
+		host="--host=${ARCH}"
+	fi
+	hl_echo "./configure ${opts} ${host}"
+	./configure ${opts} ${host} #opts is set in the calling script
+	[ $? -ne 0 ] && exit_error 1
 }
 
-function install2() {
-	local file="$1" dest="$2"
-	sh ../../cross-compile ${ARCH}-strip --strip-unneeded "$file"
-	chmod +x "$file"
-	cp "$file" "$dest"
-}
-
-############################################################################
-#					LOCAL MUSL COMPILER (tool chain)
-############################################################################
-
-function compiler_flag() {
-	. /etc/DISTRO_SPECS
-	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$CCOMP_GCC" ] ; then
-		export CC="musl-gcc -static"
-		if [ "$DISTRO_BINARY_COMPAT" = "slackware" ] ; then
-			case $ARCH in
-				*64) host=x86_64-slackware-linux ;; #tested in slacko 6.3.0
-				*) host=i486-slackware-linux ;;     #tested in slacko 6.3.0
-			esac
-		else
-			echo "Need core here: ($0) - compiler_flag()"
+#this is inside the source dir
+function _make() {
+	cf="-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+	if [ -f Makefile ] ; then
+		makefiles=$(find . -type f -name Makefile | tr '\n' ' ')
+		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g"  ${makefiles}
+		hl_echo "$(grep '^CFLAGS = ' $makefiles)"
+	else
+		export CFLAGS="$cf"
+	fi
+	[ "$1" = "make" ] && shift
+	if [ "$1" = "" ] ; then #no args
+		if [ -d "$XPATH" ] ; then #musl
+			echo "PATH: $PATH"
+			hl_echo "make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
+			make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static
+		else # system gcc
+			hl_echo "make LDFLAGS=-static CFLAGS=-static"
+			make LDFLAGS=-static CFLAGS=-static
 		fi
 	else
-		echo "Need core here: ($0) - compiler_flag()"
+		hl_echo "make $@"
+		make $@
 	fi
+	return $?
 }
 
-function make_build() {
-	CCOMP_GCC="$(which musl-gcc 2>/dev/null)"
-	if [ -x "$CCOMP_GCC" ] ; then
-		make CC="musl-gcc -static"
+#this is inside the source dir
+function _install() {
+	local file="$1" dest="$2"
+	#[ -f "$file" ] || exit_error 1
+	if [ -d "$XPATH" ] ; then
+		${ARCH}-strip --strip-all "$file" #--strip-unneeded
 	else
-		make CC="gcc --static" ${MKFLG} "$@" ## func
+		strip --strip-all "$file"
 	fi
+	chmod +x "$file"
+	cp "$file" "$dest"
 }
 
 ### END ###
