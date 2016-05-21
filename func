@@ -86,6 +86,10 @@ function hl_echo() {
 	echo
 }
 
+function _cflags() {
+	echo "-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+}
+
 #this is inside the source dir
 function _configure() {
 	unset host
@@ -109,7 +113,7 @@ function _configure() {
 
 #this is inside the source dir
 function _make() {
-	cf="-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+	cf=$(_cflags)
 	if [ -f Makefile ] ; then
 		makefiles=$(find . -type f -name Makefile | tr '\n' ' ')
 		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g"  ${makefiles}
@@ -129,7 +133,7 @@ function _make() {
 		fi
 	else
 		hl_echo "make $@"
-		make $@
+		make "$@"
 	fi
 	return $?
 }
