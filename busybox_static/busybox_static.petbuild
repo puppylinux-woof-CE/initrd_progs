@@ -33,8 +33,9 @@ esac
 build() {
 	cd ${SRC_PKG}-${VER}
 	# diff -Naur busybox-1.24.2 busybox-1.24.2_patched > busybox.patch
-	patch -p1 < ../busybox.patch
-	patch -p1 < ../busybox-cp.patch
+	for p in $(ls ../*.patch 2>/dev/null | sort) ; do
+		patch -p1 < $p
+	done
 	[ -f ../DOTconfig-static ] && cp -a ../DOTconfig-static .config
 	[ -f ../.config ] && cp -a ../.config .
 	#__inline seems to get activated when -std=gnu99 is used, causing havoc
