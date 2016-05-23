@@ -1,7 +1,7 @@
 diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/vercmp.c
 --- busybox-1.24.2/miscutils/vercmp.c	1970-01-01 00:00:00.000000000 +0000
-+++ busybox-1.24.2-patched/miscutils/vercmp.c	2016-05-22 20:07:28.000000000 +0000
-@@ -0,0 +1,154 @@
++++ busybox-1.24.2-patched/miscutils/vercmp.c	2016-05-23 13:22:03.000000000 +0000
+@@ -0,0 +1,157 @@
 +/* vi: set sw=4 ts=4: */
 +/*
 + * libdpkg - Debian packaging suite library routines
@@ -20,7 +20,7 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +//config:	bool "vercmp"
 +//config:	default y
 +//config:	help
-+//config:	  Guess filesystem type of device.
++//config:	  Compare version strings
 +//config:	  (As in Puppy vercmp)
 +
 +//usage:#define vercmp_trivial_usage
@@ -36,10 +36,9 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +
 +# define _(Text) Text
 +
-+struct versionrevision {
++struct _version_t {
 +	unsigned long epoch;
-+	char *version;
-+	const char *revision;
++	char version[50];
 +};  
 +
 +static int verrevcmp(const char *val, const char *ref) 
@@ -81,18 +80,16 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +	}
 +}
 +
-+static int versioncompare(const struct versionrevision *version,
-+                   const struct versionrevision *refversion) 
++static int versioncompare(const struct _version_t *version,
++                   const struct _version_t *refversion) 
 +{
-+	int r;
 +	if (version->epoch > refversion->epoch) return 1;
 +	if (version->epoch < refversion->epoch) return -1;
-+	r= verrevcmp(version->version,refversion->version);  if (r) return r;
-+	return verrevcmp(version->revision,refversion->revision);
++	return verrevcmp(version->version,refversion->version);
 +}
 +
-+static int versionsatisfied3(const struct versionrevision *it,
-+                      const struct versionrevision *ref,
++static int versionsatisfied3(const struct _version_t *it,
++                      const struct _version_t *ref,
 +                      const char *op) 
 +{
 +	int r;
@@ -111,13 +108,11 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +	exit(1);
 +}
 +
-+static const char *parseversion(struct versionrevision *rversion, const char *string) 
++static const char *parseversion(struct _version_t *rversion, const char *string) 
 +{
 +	char *colon, *eepochcolon;
 +	unsigned long epoch;
-+
 +	if (!*string) return _("version string is empty");
-+  
 +	colon= strchr(string,':');
 +	if (colon) {
 +		epoch= strtoul(string,&eepochcolon,10);
@@ -128,9 +123,7 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +	} else {
 +		rversion->epoch= 0;
 +	}
-+	rversion->revision = "";
-+	rversion->version= malloc(strlen(string)+1);
-+	strcpy(rversion->version, string);
++	snprintf(rversion->version, sizeof(char)*50, "%s", string);
 +	return 0;
 +}
 +
@@ -139,7 +132,8 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +int vercmp_main (int argc, char **argv)
 +{
 +	const char *err;
-+	struct versionrevision ver, ref;
++	struct _version_t ver, ref;
++	int res;
 +	if (argc < 4) {
 +		fprintf(stderr, "usage: %s version1 lt|gt|le|ge|eq version2\n       return value 0 if true, else 1\n", argv[0]);
 +		return 2;
@@ -154,5 +148,14 @@ diff -Naur busybox-1.24.2/miscutils/vercmp.c busybox-1.24.2-patched/miscutils/ve
 +		fprintf(stderr, "Invalid version `%s': %s\n", argv[3], err);
 +		return 2;
 +	}
-+	return ! versionsatisfied3(&ver, &ref, argv[2]);
++	res = (! versionsatisfied3(&ver, &ref, argv[2]));
++	if (argc > 4 && *argv[4] == 'd') {
++		printf("'epoch' 'ver'\n");
++		printf("'%d' '%s'\n", ver.epoch, ver.version);
++		printf("'%d' '%s'\n", ref.epoch, ref.version);
++		printf("exit code: %d\n",res);
++	}
++	return res;
 +}
++
++/* END */
