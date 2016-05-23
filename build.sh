@@ -401,6 +401,7 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
 	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
 	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
+	cp -fv ../busybox_static/bb-create-symlinks bin # could contain updates
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
