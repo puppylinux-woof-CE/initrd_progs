@@ -2,9 +2,12 @@
 # functions library
 # this is sourced from <app>_static/<awk>_static.petbuild
 
-. ../build.conf
+[ -f ../build.conf ] && build_conf='../build.conf' #*
+[ -f ../../build.conf ] && build_conf='../../build.conf'
+[ -f ../../../build.conf ] && build_conf='../../../build.conf'
+. ${build_conf}
 echo
-echo "main dir is $MWD"
+echo "main dir is $MWD" #MWD is set in build.sh
 echo
 
 ARCH=`uname -m`
@@ -90,6 +93,18 @@ function _cflags() {
 	echo "-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
 }
 
+function make_sh() {
+	#script can not overwrite itself
+	if [ "$MAKE_SCRIPT" != "1" ] ; then
+		echo "#!/bin/sh" > make.sh
+		echo "export MAKE_SCRIPT=1" >> make.sh
+		[ -d "$XPATH" ] && echo "export XPATH=$XPATH" >> make.sh
+		echo ". $MWD/func" >> make.sh
+		echo "_make $@" >> make.sh
+		chmod +x make.sh
+	fi
+}
+
 #this is inside the source dir
 function _configure() {
 	unset host
@@ -125,14 +140,19 @@ function _make() {
 	if [ "$1" = "" ] ; then #no args
 		if [ -d "$XPATH" ] ; then #musl
 			echo "PATH: $PATH"
-			hl_echo "make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
-			make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static
+			mkstr="${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
+			hl_echo "make $mkstr"
+			make_sh "make $mkstr"
+			make "$mkstr"
 		else # system gcc
-			hl_echo "make LDFLAGS=-static CFLAGS=-static"
-			make LDFLAGS=-static CFLAGS=-static
+			mkstr "LDFLAGS=-static CFLAGS=-static"
+			hl_echo "make $mkstr"
+			make_sh "make $mkstr"
+			make "$mkstr"
 		fi
 	else
 		hl_echo "make $@"
+		make_sh "make $@"
 		make "$@"
 	fi
 	return $?
