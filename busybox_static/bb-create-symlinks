@@ -19,11 +19,4 @@ if [ -f "$sdir/busybox" ] ; then
 	done
 fi
 
-# if busybox and e2fsck are in the same dir
-# it's because it's the initrd fs.
-if [ -f "$sdir/e2fsck" ] ; then
-	rm -f "$sdir/fsck"
-	ln -s e2fsck "$sdir/fsck"
-fi
-
 ### END ###
