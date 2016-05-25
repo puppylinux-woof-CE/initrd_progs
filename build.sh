@@ -231,6 +231,7 @@ function check_bin() {
 	case $init_pkg in
 		""|'#'*) continue ;;
 		coreutils_static) static_bins='cp' ;;
+		dosfstools_static) static_bins='fsck.fat' ;;
 		e2fsprogs_static) static_bins='fsck e2fsck resize2fs' ;;
 		findutils_static) static_bins='find' ;;
 		fuse_static) static_bins='fusermount' ;;
@@ -370,6 +371,20 @@ if [ "$INITRD_GZ" = "1" ] ; then
 			*) rm -fv bin/${app} ;;
 		esac
 	done
+	if [ -f ../0initrd/DISTRO_SPECS ] ; then
+		cp -fv ../0initrd/DISTRO_SPECS .
+		. ../0initrd/DISTRO_SPECS
+	else
+		[ -f /etc/DISTRO_SPECS ] && DS=/etc/DISTRO_SPECS
+		[ -f /initrd/DISTRO_SPECS ] && DS=/initrd/DISTRO_SPECS
+		cp -fv ${DS} .
+		. ${DS}
+	fi
+	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
+	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
+	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
+	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
+	cp -fv ../busybox_static/bb-create-symlinks bin # could contain updates
 	( 
 		cd bin
 		sh bb-create-symlinks 2>/dev/null
@@ -388,20 +403,6 @@ if [ "$INITRD_GZ" = "1" ] ; then
 			esac
 		fi
 	)
-	if [ -f ../0initrd/DISTRO_SPECS ] ; then
-		cp -fv ../0initrd/DISTRO_SPECS .
-		. ../0initrd/DISTRO_SPECS
-	else
-		[ -f /etc/DISTRO_SPECS ] && DS=/etc/DISTRO_SPECS
-		[ -f /initrd/DISTRO_SPECS ] && DS=/initrd/DISTRO_SPECS
-		cp -fv ${DS} .
-		. ${DS}
-	fi
-	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
-	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
-	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
-	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
-	cp -fv ../busybox_static/bb-create-symlinks bin # could contain updates
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"

@@ -19,4 +19,16 @@ if [ -f "$sdir/busybox" ] ; then
 	done
 fi
 
+if [ -f "$sdir/fsck.fat" ] ; then
+	ln -s fsck.fat "$sdir/fsck.vfat"
+	ln -s fsck.fat "$sdir/fsck.msdos"
+fi
+
+if [ -f "$sdir/e2fsck" ] ; then
+	ln -s e2fsck "$sdir/fsck.ext2"
+	ln -s e2fsck "$sdir/fsck.ext3"
+	ln -s e2fsck "$sdir/fsck.ext4"
+	ln -s e2fsck "$sdir/fsck.ext4dev"
+fi
+
 ### END ###
