@@ -2,9 +2,10 @@
 # functions library
 # this is sourced from <app>_static/<awk>_static.petbuild
 
-[ -f ../build.conf ] && build_conf='../build.conf' #*
-[ -f ../../build.conf ] && build_conf='../../build.conf'
+[ -f ../build.conf ] && build_conf='../build.conf'
+[ -f ../../build.conf ] && build_conf='../../build.conf' #*
 [ -f ../../../build.conf ] && build_conf='../../../build.conf'
+[ -f ../../../../build.conf ] && build_conf='../../../../build.conf'
 . ${build_conf}
 echo
 echo "main dir is $MWD" #MWD is set in build.sh
@@ -38,16 +39,16 @@ function retrieve() {
 		local URL=${SOURCE%/*}
 		local FILE=${SOURCE##*/}
 	esac
-	if [ -f ../0sources/${FILE} ] ; then
+	if [ -f ${MWD}/0sources/${FILE} ] ; then
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
-		cp -a ../0sources/${FILE} .
+		cp -a ${MWD}/0sources/${FILE} .
 	else
 		wget -c --no-check-certificate ${URL}/${FILE}
 		if [ $? -ne 0 ] ; then
 			rm -f ${FILE}
 			exit_error 1
 		fi
-		mv -f ${FILE} ../0sources
+		mv -f ${FILE} ${MWD}/0sources
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
 	fi
 }
@@ -56,8 +57,8 @@ function extract() {
 	tfile="$@"
 	if [ -f "$tfile" ] ; then
 		tar -axf ${tfile}
-	elif [ -f "../0sources/$tfile" ] ; then
-		tar -axf ../0sources/${tfile}
+	elif [ -f "${MWD}/0sources/$tfile" ] ; then
+		tar -axf ${MWD}/0sources/${tfile}
 	else
 		echo "No such file: $tfile"
 		exit_error 1
@@ -66,7 +67,7 @@ function extract() {
 		[ -f "$tfile" ] && rm -f ${tfile}
 		exit_error 1
 	fi
-	[ -f "$tfile" ] && mv -f ${tfile} ../0sources
+	[ -f "$tfile" ] && mv -f ${tfile} ${MWD}/0sources
 }
 
 function abort_if_file_not_found() {
@@ -143,17 +144,17 @@ function _make() {
 			mkstr="${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
 			hl_echo "make $mkstr"
 			make_sh "make $mkstr"
-			make "$mkstr"
+			make $mkstr
 		else # system gcc
 			mkstr "LDFLAGS=-static CFLAGS=-static"
 			hl_echo "make $mkstr"
 			make_sh "make $mkstr"
-			make "$mkstr"
+			make $mkstr
 		fi
 	else
 		hl_echo "make $@"
 		make_sh "make $@"
-		make "$@"
+		make $@
 	fi
 	return $?
 }

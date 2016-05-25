@@ -257,7 +257,7 @@ build_pkgs() {
 	sleep 1
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
 	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
-		PACKAGES=$(find . -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
 	fi
 	for init_pkg in ${PACKAGES} ; do
 		unset BIN_PATH LIB_PATH CCOMP_INCLUDE CCOMP_INCLUDE_ONLY
@@ -265,7 +265,7 @@ build_pkgs() {
 			echo "Exiting.." ; rm -f .fatal
 			exit 1
 		fi
-		[ -d "${init_pkg}_static" ] && init_pkg=${init_pkg}_static
+		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
 		check_bin $init_pkg
 		if [ $? -eq 0 ] ; then ##found
 			echo "$init_pkg exists ... skipping"
@@ -273,7 +273,7 @@ build_pkgs() {
 		fi
 		####
 		echo
-		cd ${init_pkg}
+		cd pkg/${init_pkg}
 		if [ "$DLD_ONLY" = "1" ] ; then
 			echo
 			echo "downloading $init_pkg"
@@ -283,15 +283,15 @@ build_pkgs() {
 			echo "building $init_pkg"
 		fi
 		sleep 1
-		mkdir -p ../00_${ARCH}/log
-		sh ${init_pkg}.petbuild 2>&1 | tee ../00_${ARCH}/log/${init_pkg}build.log
+		mkdir -p ${MWD}/00_${ARCH}/log
+		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
 		if [ "$?" -eq 1 ];then 
 			echo "$pkg build failure"
 			case $HALT_ERRS in
 				0) exit 1 ;;
 			esac
 		fi
-		cd $MWD
+		cd ${MWD}
 		## extra check
 		check_bin $init_pkg
 		if [ $? -ne 0 ] ; then ##not found
@@ -302,7 +302,7 @@ build_pkgs() {
 }
 
 build_pkgs
-cd $MWD
+cd ${MWD}
 
 rm -f .fatal #comment out to debug
 
@@ -384,7 +384,7 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
 	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
 	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
-	cp -fv ../busybox_static/bb-create-symlinks bin # could contain updates
+	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
 	( 
 		cd bin
 		sh bb-create-symlinks 2>/dev/null
