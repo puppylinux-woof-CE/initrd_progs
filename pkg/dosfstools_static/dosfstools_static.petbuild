@@ -14,13 +14,6 @@ DEPS=
 CAT=BuildingBlock
 CWD=`pwd`
 
-ARCH=`uname -m`
-case $ARCH in
-	*64) LIBDIR=lib64 ;;
-	*) LIBDIR=lib ;;
-esac
-[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
-
 build() {
 	cd ${SRC}-${VER}
 	EXE=dosfstools
