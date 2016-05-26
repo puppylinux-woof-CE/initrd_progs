@@ -170,6 +170,11 @@ function _install() {
 	fi
 	chmod +x "$file"
 	cp "$file" "$dest"
+	file $file | grep -E 'dynamically|shared' && {
+		echo "$file is not static..!"
+		exit_error 1
+	}
+
 }
 
 ### END ###
