@@ -25,6 +25,7 @@ Usage:
                 INITRD_PROGS='..' in build.conf
   -arch target: compile for target arch
   -sysgcc     : use system gcc
+  -cross      : use the cross compilers from Aboriginal Linux
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -40,8 +41,12 @@ Usage:
 while [ "$1" ] ; do
 	case $1 in
 		-l|-sysgcc)
-			USE_LOCAL_GCC=1
+			USE_SYS_GCC=1
 			which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
+			shift
+			;;
+		-cross)
+			CROSS_COMPILE=1
 			shift
 			;;
 		-all)
@@ -93,15 +98,28 @@ case $ARCH in
 	*)    ARCH=$ARCH ;;
 esac
 
+if [ "$$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
+	# the cross compilers from landley.net were compiled on x86
+	# if we're using the script in a non-x86 system
+	# it means that the system gcc must be chosen by default
+	# perhaps we're running qemu or a native linux os
+	case $ARCH in
+		i?86|x86_64) CROSS_COMPILE=1 ;;
+		*) USE_SYS_GCC=1 ;;
+	esac
+fi
 
 ###################################################################
 #							MAIN
 ###################################################################
 
-if [ "$USE_LOCAL_GCC" = "1" ] ; then
+if [ "$USE_SYS_GCC" = "1" ] ; then
+	echo
+	echo "Building in: $ARCH"
 	echo
 	echo "* Using system gcc"
 	echo
+	sleep 1.5
 else
 
 	#############################
@@ -113,9 +131,8 @@ else
 		*)
 			echo -e "*** The cross-compilers from aboriginal linux"
 			echo -e "*** work in x86 systems only, I guess."
-			echo -e "\n* Run $0 -sysgcc to use the system gcc ... "
-			echo -e "\n*** Exiting..."
-			exit 1
+			echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
+			echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
 	esac
 
 	#--------------------------------------------------
