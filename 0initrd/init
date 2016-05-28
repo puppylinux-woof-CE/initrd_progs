@@ -287,11 +287,6 @@ mntfunc() {
  return $?
 }
 
-umntfunc() {
-	umount $@
-	return $?
-}
-
 check_status()
 {
   if [ $1 -eq 0 ]
@@ -642,7 +637,7 @@ search_func() { #110425
   [ -f /mnt/data/fsckme.flg ] && FSCKME="`cat /mnt/data/fsckme.flg | tr ',' ' ' | tr '\n' ' '`" \
    && DEEPFSCK="yes"
   rm -f /mnt/data/fsckme.flg
-  umntfunc /mnt/data
+  umount /mnt/data
   [ "$FSCKME" ] && fsckme_func $FSCKME
  done
 } #search_func
@@ -1540,7 +1535,7 @@ if [ "$CREATEPUPXXXSFS" != "" ];then
   sync
   SFSBASENAME="`basename $PUPSFSFILE`"
   losetup /dev/loop0 /mnt/tmpfs/${SFSBASENAME}
-#101013 moved down  [ "$UMOUNTME" != "" ] && umntfunc $UMOUNTME
+#101013 moved down  [ "$UMOUNTME" != "" ] && umount $UMOUNTME
  else
   losetup /dev/loop0 ${PUPSFSDEVMNTPT}${PUPSFSFILE}
  fi
@@ -1614,7 +1609,7 @@ if [ $PUPMODE -eq 5 ];then
    touch /pup_rw/root/.xorgwizard-reenter #see /root/.profile, will cause xorgwizard to run.
    #...see also /etc/rc.d/rc.sysinit
   fi
-  [ $pdFLG -eq 1 ] && umntfunc $pdMNTPT
+  [ $pdFLG -eq 1 ] && umount $pdMNTPT
  fi
 else
  [ -f /tmp/RWPART ] && rm -f /tmp/RWPART
@@ -1707,7 +1702,7 @@ if [ "$FDRV" != "" ];then
   fi
 fi
 
-[ "$UMOUNTME" != "" ] && umntfunc $UMOUNTME #101013 puppy.sfs was copied to tmpfs so can unmount partition.
+[ "$UMOUNTME" != "" ] && umount $UMOUNTME #101013 puppy.sfs was copied to tmpfs so can unmount partition.
 
 check_status 0 #$?
 ########################END LOADING PUPPY FILES########################

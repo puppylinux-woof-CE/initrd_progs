@@ -2,17 +2,28 @@
 # functions library
 # this is sourced from <app>_static/<awk>_static.petbuild
 
-. ../build.conf
+[ -f ../build.conf ] && build_conf='../build.conf'
+[ -f ../../build.conf ] && build_conf='../../build.conf' #*
+[ -f ../../../build.conf ] && build_conf='../../../build.conf'
+[ -f ../../../../build.conf ] && build_conf='../../../../build.conf'
+. ${build_conf}
 echo
-echo "main dir is $MWD"
+echo "main dir is $MWD" #MWD is set in build.sh
 echo
 
-ARCH=`uname -m`
-case $ARCH in
-	arm*) ARCH=armv6l ;; # newest supported
-	*)    ARCH=$ARCH ;;
-esac
-[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+function set_arch() {
+	ARCH=`uname -m`
+	case $ARCH in
+		arm*) ARCH=armv6l ;; # newest supported
+		*)    ARCH=$ARCH ;;
+	esac
+	[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+	case $ARCH in
+		*64) LIBDIR=lib64 ;;
+		*) LIBDIR=lib ;;
+	esac
+}
+set_arch
 
 if [ -d "$XPATH" ] ; then
 	#XPATH is set in build.sh
@@ -35,16 +46,16 @@ function retrieve() {
 		local URL=${SOURCE%/*}
 		local FILE=${SOURCE##*/}
 	esac
-	if [ -f ../0sources/${FILE} ] ; then
+	if [ -f ${MWD}/0sources/${FILE} ] ; then
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
-		cp -a ../0sources/${FILE} .
+		cp -a ${MWD}/0sources/${FILE} .
 	else
 		wget -c --no-check-certificate ${URL}/${FILE}
 		if [ $? -ne 0 ] ; then
 			rm -f ${FILE}
 			exit_error 1
 		fi
-		mv -f ${FILE} ../0sources
+		mv -f ${FILE} ${MWD}/0sources
 		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
 	fi
 }
@@ -53,8 +64,8 @@ function extract() {
 	tfile="$@"
 	if [ -f "$tfile" ] ; then
 		tar -axf ${tfile}
-	elif [ -f "../0sources/$tfile" ] ; then
-		tar -axf ../0sources/${tfile}
+	elif [ -f "${MWD}/0sources/$tfile" ] ; then
+		tar -axf ${MWD}/0sources/${tfile}
 	else
 		echo "No such file: $tfile"
 		exit_error 1
@@ -63,7 +74,7 @@ function extract() {
 		[ -f "$tfile" ] && rm -f ${tfile}
 		exit_error 1
 	fi
-	[ -f "$tfile" ] && mv -f ${tfile} ../0sources
+	[ -f "$tfile" ] && mv -f ${tfile} ${MWD}/0sources
 }
 
 function abort_if_file_not_found() {
@@ -84,6 +95,22 @@ function hl_echo() {
 	echo "$@"
 	echo '------------------------------'
 	echo
+}
+
+function _cflags() {
+	echo "-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+}
+
+function make_sh() {
+	#script can not overwrite itself
+	if [ "$MAKE_SCRIPT" != "1" ] ; then
+		echo "#!/bin/sh" > make.sh
+		echo "export MAKE_SCRIPT=1" >> make.sh
+		[ -d "$XPATH" ] && echo "export XPATH=$XPATH" >> make.sh
+		echo ". $MWD/func" >> make.sh
+		echo "_make $@" >> make.sh
+		chmod +x make.sh
+	fi
 }
 
 #this is inside the source dir
@@ -109,7 +136,7 @@ function _configure() {
 
 #this is inside the source dir
 function _make() {
-	cf="-g -Os" #-fmerge-all-constants -fno-unroll-loops -fomit-frame-pointer -ffunction-sections -fdata-sections"
+	cf=$(_cflags)
 	if [ -f Makefile ] ; then
 		makefiles=$(find . -type f -name Makefile | tr '\n' ' ')
 		sed -i "s|\(^CFLAGS =.*\)|\1 $cf|g"  ${makefiles}
@@ -121,14 +148,19 @@ function _make() {
 	if [ "$1" = "" ] ; then #no args
 		if [ -d "$XPATH" ] ; then #musl
 			echo "PATH: $PATH"
-			hl_echo "make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
-			make ${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static
+			mkstr="${MKFLG} CC=${ARCH}-gcc LD=${ARCH}-ld AR=${ARCH}-ar RANLIB=${ARCH}-ranlib NM=${ARCH}-nm LDFLAGS=-static"
+			hl_echo "make $mkstr"
+			make_sh "make $mkstr"
+			make $mkstr
 		else # system gcc
-			hl_echo "make LDFLAGS=-static CFLAGS=-static"
-			make LDFLAGS=-static CFLAGS=-static
+			mkstr "LDFLAGS=-static CFLAGS=-static"
+			hl_echo "make $mkstr"
+			make_sh "make $mkstr"
+			make $mkstr
 		fi
 	else
 		hl_echo "make $@"
+		make_sh "make $@"
 		make $@
 	fi
 	return $?
@@ -145,6 +177,11 @@ function _install() {
 	fi
 	chmod +x "$file"
 	cp "$file" "$dest"
+	file $file | grep -E 'dynamically|shared' && {
+		echo "$file is not static..!"
+		exit_error 1
+	}
+
 }
 
 ### END ###

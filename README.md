@@ -3,7 +3,7 @@ initrd_progs
 
 programs, including busybox, statically linked for the initial ram disk
 
-This should produce all the statically linked programs required for a Puppy Linux initrd.gz
+This should produce all the statically linked programs required for a Puppy Linux initrd.gz/xz
 
 This is also a place of experimentation.
 
@@ -15,7 +15,7 @@ Run `./build.sh` or `./build.sh -help` to see the available options
 - by default an attempt will be made to build all packages in the queue defined in build.conf
 - for more options look in build.conf
 
-The script can also generate an initrd.gz file ready to test, you can add these files:
+The script can also generate an initrd.gz/xz file ready to test, you can add these files:
 - 0initrd/DISTRO_SPECS (optional, otherwise it will use the system one)
 - 0initrd/init (optional custom init script)
 

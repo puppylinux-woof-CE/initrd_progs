@@ -20,11 +20,12 @@ Usage:
   Options:
   -pkg pkg    : compile specific pkg only
   -all        : force building all *_static pkgs
-  -copyall    : use all generated binaries to create initrd.gz
+  -copyall    : copy all generated binaries to the initrd
                 otherwise only the ones specified in
                 INITRD_PROGS='..' in build.conf
   -arch target: compile for target arch
   -sysgcc     : use system gcc
+  -cross      : use the cross compilers from Aboriginal Linux
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -40,8 +41,12 @@ Usage:
 while [ "$1" ] ; do
 	case $1 in
 		-l|-sysgcc)
-			USE_LOCAL_GCC=1
+			USE_SYS_GCC=1
 			which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
+			shift
+			;;
+		-cross)
+			CROSS_COMPILE=1
 			shift
 			;;
 		-all)
@@ -62,8 +67,26 @@ while [ "$1" ] ; do
 			TARGET_ARCH="$2"
 			shift 2
 			;;
+		gz|xz)
+			INITRD_COMP=$1
+			shift
+			;;
 		-h|-help|--help)
 			help_msg
+			exit
+			;;
+		-clean)
+			echo -e "\nWe're going to remove some unneeded files"
+			echo -e "and move some generated dirs to ../initrd_temp"
+			echo -e "Press P and hit enter to proceed, any other combination to cancel.."
+			read zz
+			case $zz in p|P)
+				mkdir -p ../initrd_temp
+				mv -f 00_* ../initrd_temp
+				mv -f 0sources ../initrd_temp
+				mv -f cross-compiler* ../initrd_temp
+				rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler*
+			esac
 			exit
 			;;
 		*)
@@ -79,15 +102,28 @@ case $ARCH in
 	*)    ARCH=$ARCH ;;
 esac
 
+if [ "$$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
+	# the cross compilers from landley.net were compiled on x86
+	# if we're using the script in a non-x86 system
+	# it means that the system gcc must be chosen by default
+	# perhaps we're running qemu or a native linux os
+	case $ARCH in
+		i?86|x86_64) CROSS_COMPILE=1 ;;
+		*) USE_SYS_GCC=1 ;;
+	esac
+fi
 
 ###################################################################
 #							MAIN
 ###################################################################
 
-if [ "$USE_LOCAL_GCC" = "1" ] ; then
+if [ "$USE_SYS_GCC" = "1" ] ; then
+	echo
+	echo "Building in: $ARCH"
 	echo
 	echo "* Using system gcc"
 	echo
+	sleep 1.5
 else
 
 	#############################
@@ -99,9 +135,8 @@ else
 		*)
 			echo -e "*** The cross-compilers from aboriginal linux"
 			echo -e "*** work in x86 systems only, I guess."
-			echo -e "\n* Run $0 -sysgcc to use the system gcc ... "
-			echo -e "\n*** Exiting..."
-			exit 1
+			echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
+			echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
 	esac
 
 	#--------------------------------------------------
@@ -217,6 +252,7 @@ function check_bin() {
 	case $init_pkg in
 		""|'#'*) continue ;;
 		coreutils_static) static_bins='cp' ;;
+		dosfstools_static) static_bins='fsck.fat' ;;
 		e2fsprogs_static) static_bins='fsck e2fsck resize2fs' ;;
 		findutils_static) static_bins='find' ;;
 		fuse_static) static_bins='fusermount' ;;
@@ -242,7 +278,7 @@ build_pkgs() {
 	sleep 1
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
 	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
-		PACKAGES=$(find . -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
 	fi
 	for init_pkg in ${PACKAGES} ; do
 		unset BIN_PATH LIB_PATH CCOMP_INCLUDE CCOMP_INCLUDE_ONLY
@@ -250,7 +286,7 @@ build_pkgs() {
 			echo "Exiting.." ; rm -f .fatal
 			exit 1
 		fi
-		[ -d "${init_pkg}_static" ] && init_pkg=${init_pkg}_static
+		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
 		check_bin $init_pkg
 		if [ $? -eq 0 ] ; then ##found
 			echo "$init_pkg exists ... skipping"
@@ -258,7 +294,7 @@ build_pkgs() {
 		fi
 		####
 		echo
-		cd ${init_pkg}
+		cd pkg/${init_pkg}
 		if [ "$DLD_ONLY" = "1" ] ; then
 			echo
 			echo "downloading $init_pkg"
@@ -268,15 +304,15 @@ build_pkgs() {
 			echo "building $init_pkg"
 		fi
 		sleep 1
-		mkdir -p ../00_${ARCH}/log
-		sh ${init_pkg}.petbuild 2>&1 | tee ../00_${ARCH}/log/${init_pkg}build.log
+		mkdir -p ${MWD}/00_${ARCH}/log
+		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
 		if [ "$?" -eq 1 ];then 
 			echo "$pkg build failure"
 			case $HALT_ERRS in
 				0) exit 1 ;;
 			esac
 		fi
-		cd $MWD
+		cd ${MWD}
 		## extra check
 		check_bin $init_pkg
 		if [ $? -ne 0 ] ; then ##not found
@@ -287,7 +323,7 @@ build_pkgs() {
 }
 
 build_pkgs
-cd $MWD
+cd ${MWD}
 
 rm -f .fatal #comment out to debug
 
@@ -310,12 +346,20 @@ fi
 #            create initial ramdisk
 #----------------------------------------------------
 
-if [ "$INITRD_GZ" = "1" ] ; then
+case ${INITRD_COMP} in
+	gz|xz) ok=1 ;;
+	*) INITRD_COMP="gz" ;; #precaution
+esac
+
+INITRD_FILE="initrd.${INITRD_COMP}"
+[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
+
+if [ "$INITRD_CREATE" = "1" ] ; then
 	echo
-	echo -n "Press enter to create initrd.gz, CTRL-C to end here.." ; read zzz
+	echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." ; read zzz
 	echo
 	echo "============================================"
-	echo "Now creating the initial ramdisk (initrd.gz) (for 'huge' kernels)"
+	echo "Now creating the initial ramdisk (${INITRD_FILE}) (for 'huge' kernels)"
 	echo "============================================"
 	echo
 	initrdtree=$(find 0initrd -maxdepth 1 -name 'initrd-tree*')
@@ -356,6 +400,20 @@ if [ "$INITRD_GZ" = "1" ] ; then
 			*) rm -fv bin/${app} ;;
 		esac
 	done
+	if [ -f ../0initrd/DISTRO_SPECS ] ; then
+		cp -fv ../0initrd/DISTRO_SPECS .
+		. ../0initrd/DISTRO_SPECS
+	else
+		[ -f /etc/DISTRO_SPECS ] && DS=/etc/DISTRO_SPECS
+		[ -f /initrd/DISTRO_SPECS ] && DS=/initrd/DISTRO_SPECS
+		cp -fv ${DS} .
+		. ${DS}
+	fi
+	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
+	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
+	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
+	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
+	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
 	( 
 		cd bin
 		sh bb-create-symlinks 2>/dev/null
@@ -374,50 +432,42 @@ if [ "$INITRD_GZ" = "1" ] ; then
 			esac
 		fi
 	)
-	if [ -f ../0initrd/DISTRO_SPECS ] ; then
-		cp -fv ../0initrd/DISTRO_SPECS .
-		. ../0initrd/DISTRO_SPECS
-	else
-		[ -f /etc/DISTRO_SPECS ] && DS=/etc/DISTRO_SPECS
-		[ -f /initrd/DISTRO_SPECS ] && DS=/initrd/DISTRO_SPECS
-		cp -fv ${DS} .
-		. ${DS}
-	fi
-	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
-	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
-	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
-	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
 	echo
-	echo -n "Press ENTER to generate initrd.gz ..." ; read zzz
+	echo -n "Press ENTER to generate ${INITRD_FILE} ..." ; read zzz
 	echo
 	####
 	find . | cpio -o -H newc > ../initrd
 	cd ..
-	[ -f initrd.gz ] && rm -fv initrd.gz
-	gzip -f initrd
+	[ -f initrd.[gx]z ] && rm -fv initrd.*
+	case ${INITRD_COMP} in
+		gz) gzip -f initrd ;;
+		xz) xz --check=crc32 --lzma2 initrd ;;
+		*)  gzip -f initrd ;;
+	esac
 	if [ $? -eq 0 ] ; then
 		echo
-		echo "initrd.gz has been created"
+		echo "${INITRD_FILE} has been created"
 		echo "You can inspect ZZ_initrd-expanded to see the final results"
 	else
 		echo "ERROR" ; exit 1
 	fi
+	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
 else
-	echo "Not creating initrd.gz"
+	echo "Not creating ${INITRD_FILE}"
 fi
 
-if [ "$DISTRO_BINARY_COMPAT" ] ; then
-	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
-	rm -f $pkgx
-	tar zcf $pkgx initrd.gz 00_${ARCH}
-fi
+pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
+rm -f ${pkgx%.*}.*
+echo -en "\nCreating $pkgx..."
+tar zcf $pkgx ${INITRD_FILE} 00_${ARCH}
+echo
 
 echo
 echo " - Output files -"
-echo "initrd.gz: use it in a frugall install for example"
+echo "${INITRD_FILE}: use it in a frugal install for example"
 echo "$pkgx: to store or distribute"
 echo
 echo "Finished."
