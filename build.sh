@@ -20,7 +20,7 @@ Usage:
   Options:
   -pkg pkg    : compile specific pkg only
   -all        : force building all *_static pkgs
-  -copyall    : use all generated binaries to create initrd.gz
+  -copyall    : copy all generated binaries to the initrd
                 otherwise only the ones specified in
                 INITRD_PROGS='..' in build.conf
   -arch target: compile for target arch
@@ -67,6 +67,10 @@ while [ "$1" ] ; do
 			TARGET_ARCH="$2"
 			shift 2
 			;;
+		gz|xz)
+			INITRD_COMP=$1
+			shift
+			;;
 		-h|-help|--help)
 			help_msg
 			exit
@@ -81,7 +85,7 @@ while [ "$1" ] ; do
 				mv -f 00_* ../initrd_temp
 				mv -f 0sources ../initrd_temp
 				mv -f cross-compiler* ../initrd_temp
-				rm -rf initrd.gz initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler*
+				rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler*
 			esac
 			exit
 			;;
@@ -342,12 +346,20 @@ fi
 #            create initial ramdisk
 #----------------------------------------------------
 
-if [ "$INITRD_GZ" = "1" ] ; then
+case ${INITRD_COMP} in
+	gz|xz) ok=1 ;;
+	*) INITRD_COMP="gz" ;; #precaution
+esac
+
+INITRD_FILE="initrd.${INITRD_COMP}"
+[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
+
+if [ "$INITRD_CREATE" = "1" ] ; then
 	echo
-	echo -n "Press enter to create initrd.gz, CTRL-C to end here.." ; read zzz
+	echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." ; read zzz
 	echo
 	echo "============================================"
-	echo "Now creating the initial ramdisk (initrd.gz) (for 'huge' kernels)"
+	echo "Now creating the initial ramdisk (${INITRD_FILE}) (for 'huge' kernels)"
 	echo "============================================"
 	echo
 	initrdtree=$(find 0initrd -maxdepth 1 -name 'initrd-tree*')
@@ -424,33 +436,38 @@ if [ "$INITRD_GZ" = "1" ] ; then
 	echo
 	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
 	echo
-	echo -n "Press ENTER to generate initrd.gz ..." ; read zzz
+	echo -n "Press ENTER to generate ${INITRD_FILE} ..." ; read zzz
 	echo
 	####
 	find . | cpio -o -H newc > ../initrd
 	cd ..
-	[ -f initrd.gz ] && rm -fv initrd.gz
-	gzip -f initrd
+	[ -f initrd.[gx]z ] && rm -fv initrd.*
+	case ${INITRD_COMP} in
+		gz) gzip -f initrd ;;
+		xz) xz --check=crc32 --lzma2 initrd ;;
+		*)  gzip -f initrd ;;
+	esac
 	if [ $? -eq 0 ] ; then
 		echo
-		echo "initrd.gz has been created"
+		echo "${INITRD_FILE} has been created"
 		echo "You can inspect ZZ_initrd-expanded to see the final results"
 	else
 		echo "ERROR" ; exit 1
 	fi
+	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
 else
-	echo "Not creating initrd.gz"
+	echo "Not creating ${INITRD_FILE}"
 fi
 
-if [ "$DISTRO_BINARY_COMPAT" ] ; then
-	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
-	rm -f $pkgx
-	tar zcf $pkgx initrd.gz 00_${ARCH}
-fi
+pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
+rm -f ${pkgx%.*}.*
+echo -en "\nCreating $pkgx..."
+tar zcf $pkgx ${INITRD_FILE} 00_${ARCH}
+echo
 
 echo
 echo " - Output files -"
-echo "initrd.gz: use it in a frugall install for example"
+echo "${INITRD_FILE}: use it in a frugal install for example"
 echo "$pkgx: to store or distribute"
 echo
 echo "Finished."

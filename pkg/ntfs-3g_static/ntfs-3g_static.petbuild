@@ -23,8 +23,8 @@ build() {
 	patch -N -p1 < ../libfuse-musl.patch
 	opts="--prefix=/usr --disable-library --enable-really-static --enable-mount-helper"
 	_configure
-	sed -i 's|-static|-all-static|' ntfsprogs/Makefile
-	_make ${MKFLG}
+	sed -i 's| -static| -all-static|' ntfsprogs/Makefile
+	_make
 	abort_if_file_not_found src/ntfs-3g ntfsprogs/ntfsfix
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
 	_install src/ntfs-3g $CWD/${PKG}-${VER}-${ARCH}/bin
