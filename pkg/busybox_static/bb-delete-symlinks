@@ -4,6 +4,8 @@ sdir=$(dirname "$0")
 
 ls "$sdir" | \
 	while read file ; do
-		[ "$(readlink $sdir/$file)" = "busybox" ] && rm "$sdir/$file"
+		case $(readlink $sdir/$file) in
+			*busybox) rm "$sdir/$file" ;;
+		esac
 	done
 
