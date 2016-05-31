@@ -431,13 +431,24 @@ append_needed() {
  fi
 }
 
-decode_spec() {
- DEV=""; SPEC=""
+decode_id() {
+ DEV=""
  [ "${1}" ] || return
- DEV="`echo "$1" | cut -f 1 -d ':'`"
+ HAVEIDPARAM="yes"
+ if [ "`echo -n ${1} | grep -E '^[a-z]+[0-9]'`" -a "`grep -m1 "${1}$" /proc/partitions`" ];then
+  DEV="$1"  #is a real partition
+ else
+  [ "$BLKIDOUT" ] || BLKIDOUT="`blkid`"
+  DEV="`echo "$BLKIDOUT" | grep -m1 -E "LABEL=.${1}|UUID=.${1}" | cut -f1 -d: | cut -f3 -d/`" #is LABEL or UUID
+ fi
+}
+
+decode_spec() {
+ DID=""; SPEC=""
+ [ "${1}" ] || return
+ DID="`echo "$1" | cut -f 1 -d ':'`"
  SPEC="`echo "$1" | cut -f 2 -d ':'`"
- [ "$SPEC" = "$DEV" ] && SPEC=""
- append_needed "$DEV"
+ [ "$SPEC" = "$DID" ] && SPEC=""
 }
 
 search_func() { #110425
@@ -452,6 +463,26 @@ search_func() { #110425
   ;;
  esac
 
+ #get DEV from DEV or ID specified in sfs boot params
+ BLKIDOUT=""
+ decode_id "$PUPSFSID"
+ if [ "$DEV" ];then
+  append_needed "$DEV"
+  PUPSFSDEV="$DEV"
+  [ "$PDEV1" ] || PDEV1="$DEV"
+  PUPSFSID=""
+ fi
+ decode_id "$ZDRVID"
+ [ "$DEV" ] && { append_needed "$DEV"; ZDRVDEV="$DEV"; ZDRVID=""; }
+ if [ "$EXTRAFW" = "yes" ];then
+  decode_id "$FDRVID"
+  [ "$DEV" ] && { append_needed "$DEV"; FDRVDEV="$DEV"; FDRVID=""; }
+ fi
+ decode_id "$ADRVID"
+ [ "$DEV" ] && { append_needed "$DEV"; ADRVDEV="$DEV"; ADRVID=""; }
+ decode_id "$YDRVID"
+ [ "$DEV" ] && { append_needed "$DEV"; YDRVDEV="$DEV"; YDRVID=""; }
+
  if [ "$PMEDIA" ];then #kernel boot param
   case $PMEDIA in
    cd)
@@ -465,6 +496,8 @@ search_func() { #110425
       BOOTDRV="`echo -n "$PDEV1" | grep -o -f /tmp/ALLDRVS0`" #ex: sda1 becomes sda
       append_needed "${BOOTDRV}${PSAVEMARK}"
      fi
+     LESSPARTS0="`echo "$LESSPARTS0" | grep -E "$NEEDDPARTS"`"
+    elif [ "$HAVEIDPARAM" ];then
      LESSPARTS0="`echo "$LESSPARTS0" | grep -E "$NEEDDPARTS"`"
     fi
    ;;
@@ -921,6 +954,7 @@ check_status 0 #END STEP ONE
 echo -n "Searching for Puppy files..." > /dev/console #STEP TWO
 
 NEEDDPARTS=""
+HAVEIDPARAM=""
 
 PUPMODE=0
 touch /tmp/PUPSAVES
@@ -928,11 +962,11 @@ KERNELNAME='vmlinuz'
 
 #100915 technosaurus recommendation (see above)...
 
-[ "$PUPSFS" ] && { decode_spec "$PUPSFS"; PUPSFSDEV="$DEV"; PUPSFSSPEC="$SPEC"; PUPSFS=""; }
-[ "$ZDRV" ] && { decode_spec "$ZDRV"; ZDRVDEV="$DEV"; ZDRVSPEC="$SPEC"; ZDRV=""; }
-[ "$FDRV" -a "$EXTRAFW" = "yes" ] && { decode_spec "$FDRV"; FDRVDEV="$DEV"; FDRVSPEC="$SPEC"; FDRV=""; }	
-[ "$ADRV" ] && { decode_spec "$ADRV"; ADRVDEV="$DEV"; ADRVSPEC="$SPEC"; ADRV=""; }
-[ "$YDRV" ] && { decode_spec "$YDRV"; YDRVDEV="$DEV"; YDRVSPEC="$SPEC"; YDRV=""; }
+[ "$PUPSFS" ] && { decode_spec "$PUPSFS"; PUPSFSID="$DID"; PUPSFSSPEC="$SPEC"; PUPSFS=""; }
+[ "$ZDRV" ] && { decode_spec "$ZDRV"; ZDRVID="$DID"; ZDRVSPEC="$SPEC"; ZDRV=""; }
+[ "$FDRV" -a "$EXTRAFW" = "yes" ] && { decode_spec "$FDRV"; FDRVID="$DID"; FDRVSPEC="$SPEC"; FDRV=""; }	
+[ "$ADRV" ] && { decode_spec "$ADRV"; ADRVID="$DID"; ADRVSPEC="$SPEC"; ADRV=""; }
+[ "$YDRV" ] && { decode_spec "$YDRV"; YDRVID="$DID"; YDRVSPEC="$SPEC"; YDRV=""; }
 
 #first look inside initrd...
 [ -f /${PUPXXXSFS} ] && PUPSFS="rootfs,rootfs,/${PUPXXXSFS}"
@@ -968,7 +1002,10 @@ if [ -s /tmp/flag-usb-ready ];then #110710 has stuff in it if usb drives exist.
    FS=$(echo $PUPSFS | cut -s -f2 -d',')
    echo $FS | grep -q -E 'iso9660|udf' && PUPSFS_OPT=$PUPSFS && PUPSFS=""
  fi
- if [ "$VMLINUZ" = "" -o "$PUPSFS" = "" -o "$SAVEPART" = "" ];then
+ MOREIDS=""
+ [ "$ZDRVID" -o "$ADRVID" -o "$YDRVID" ] && MOREIDS="yes"
+ [ "$EXTRAFW" = "yes" -a "$FDRVID" ] && MOREIDS="yes"
+ if [ "$VMLINUZ" = "" -o "$PUPSFS" = "" -o "$SAVEPART" = "" -o "$MOREIDS" = "yes" ];then
   search_func usb
  fi
  [ "$PUPSFS" ] || PUPSFS=$PUPSFS_OPT
