@@ -102,7 +102,7 @@ case $ARCH in
 	*)    ARCH=$ARCH ;;
 esac
 
-if [ "$$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
+if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	# the cross compilers from landley.net were compiled on x86
 	# if we're using the script in a non-x86 system
 	# it means that the system gcc must be chosen by default
