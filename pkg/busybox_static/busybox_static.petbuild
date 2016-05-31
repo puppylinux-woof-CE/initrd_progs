@@ -67,8 +67,10 @@ build() {
 	done
 	[ -f ../DOTconfig-static ] && cp -a ../DOTconfig-static .config
 	[ -f ../.config ] && cp -a ../.config .
-	[ -f ../.config-del ] && cp -a ../.config-del .config
-	rm -rf ../.config-del
+	[ -f ../.config-del ] && cp -a ../.config-del .config && rm -rf ../.config-del
+	for KONFIG in CONFIG_FEATURE_PREFER_APPLETS ; do
+		sed -i "s|.*${KONFIG}.*|${KONFIG}=y|" .config
+	done
 	#__inline seems to get activated when -std=gnu99 is used, causing havoc
 	sed -i 's,__inline,,' ./scripts/kconfig/zconf.hash.c_shipped
 	[ -d "$XPATH" ] && CRC="CROSS_COMPILE=${ARCH}-"
