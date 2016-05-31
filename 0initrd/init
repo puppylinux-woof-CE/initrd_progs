@@ -422,6 +422,14 @@ load_onepupdrv() {
  [ $? -eq 0 ] && { ONEDRVLAYER="/pup_${DRVSFX}=ro"; ONEDRVFACTOR="$DRVBASENAME"; }
 }
 
+decode_spec() {
+ DEV=""; SPEC=""
+ [ "${1}" ] || return
+ DEV="`echo "$1" | cut -f 1 -d ':'`"
+ SPEC="`echo "$1" | cut -f 2 -d ':'`"
+ [ "$SPEC" = "$DEV" ] && SPEC=""
+}
+
 search_func() { #110425
 
  case $1 in
@@ -490,6 +498,34 @@ search_func() { #110425
   fi
   echo "ONEDEV=$ONEDEV ONEFS=$ONEFS ONEDRV=$ONEDRV PSUBDIR=$PSUBDIR" >> /tmp/puppy-file-search.log #101127 for debugging.
   
+  if [ "$PUPSFSDEV" = "$ONEDEV" ];then
+   find_onepupdrv "$PUPSFSSPEC"
+   [ "$ONEPUPDRV" ] || find_onepupdrv "$PUPXXXSFS"
+   [ "$ONEPUPDRV" ] && { PUPSFS="$ONEPUPDRV"; PUPSFSSPEC=""; VMLINUZ=""; }
+  fi
+  if [ "$ZDRVDEV" = "$ONEDEV" ];then
+   find_onepupdrv "$ZDRVSPEC"
+   [ "$ONEPUPDRV" ] || find_onepupdrv "$ZDRVSFS"
+   [ "$ONEPUPDRV" ] && { ZDRV="$ONEPUPDRV"; ZDRVSPEC=""; }
+  fi
+  if [ "$EXTRAFW" = "yes" ];then
+   if [ "$FDRVDEV" = "$ONEDEV" ];then
+    find_onepupdrv "$FDRVSPEC" "f"
+    [ "$ONEPUPDRV" ] || find_onepupdrv "$FDRVSFS" "f"
+    [ "$ONEPUPDRV" ] && { FDRV="$ONEPUPDRV"; FDRVSPEC=""; }
+   fi
+  fi
+  if [ "$ADRVDEV" = "$ONEDEV" ];then
+   find_onepupdrv "$ADRVSPEC" "a"
+   [ "$ONEPUPDRV" ] || find_onepupdrv "$ADRVSFS" "a"
+   [ "$ONEPUPDRV" ] && { ADRV="$ONEPUPDRV"; ADRVSPEC=""; }
+  fi
+  if [ "$YDRVDEV" = "$ONEDEV" ];then
+   find_onepupdrv "$YDRVSPEC" "y"
+   [ "$ONEPUPDRV" ] || find_onepupdrv "$YDRVSFS" "y"
+   [ "$ONEPUPDRV" ] && { YDRV="$ONEPUPDRV"; YDRVSPEC=""; }
+  fi
+
   if [ -d /mnt/data${PSUBDIR} ];then
   
    if [ "$VMLINUZ" = "" ];then #search for kernel.qky and vmlinuz...
@@ -879,47 +915,12 @@ touch /tmp/PUPSAVES
 KERNELNAME='vmlinuz'
 
 #100915 technosaurus recommendation (see above)...
-if [ "$PUPSFS" ];then
- DEV="`echo "$PUPSFS" | cut -f 1 -d ':'`"
- FS="`echo "$PCPARTS0" | grep "${DEV}|" | cut -f 2 -d '|'`"
- SPEC="`echo -n "$PUPSFS" | cut -f 2 -d ':'`"
- PUPXXXSFS="`basename $SPEC`"
- [ "$PSUBDIR" = "" ] && PSUBDIR="`dirname $SPEC`"
- [ "$PSUBDIR" = "/" ] && PSUBDIR=""
- PUPSFS="${DEV},${FS},${SPEC}"
- LESSPARTS0="${DEV}|${FS}" #110425
-fi
-if [ "$ZDRV" ];then
- DEV="`echo "$ZDRV" | cut -f 1 -d ':'`"
- FS="`echo "$PCPARTS0" | grep "${DEV}|" | cut -f 2 -d '|'`"
- SPEC="`echo -n "$ZDRV" | cut -f 2 -d ':'`"
- ZDRVSFS="`basename $SPEC`"
- ZDRV="${DEV},${FS},${SPEC}"
-fi
 
-if [ "$FDRV" -a "$EXTRAFW" = "yes" ];then
- DEV="`echo "$FDRV" | cut -f 1 -d ':'`"
- FS="`echo "$PCPARTS0" | grep "${DEV}|" | cut -f 2 -d '|'`"
- SPEC="`echo -n "$FDRV" | cut -f 2 -d ':'`"
- FDRVSFS="`basename $SPEC`"
- FDRV="${DEV},${FS},${SPEC}"
-fi
-
-if [ "$ADRV" ];then
- DEV="`echo "$ADRV" | cut -f 1 -d ':'`"
- FS="`echo "$PCPARTS0" | grep "${DEV}|" | cut -f 2 -d '|'`"
- SPEC="`echo -n "$ADRV" | cut -f 2 -d ':'`"
- ADRVSFS="`basename $SPEC`"
- ADRV="${DEV},${FS},${SPEC}"
-fi
-
-if [ "$YDRV" ];then
- DEV="`echo "$YDRV" | cut -f 1 -d ':'`"
- FS="`echo "$PCPARTS0" | grep "${DEV}|" | cut -f 2 -d '|'`"
- SPEC="`echo -n "$YDRV" | cut -f 2 -d ':'`"
- YDRVSFS="`basename $SPEC`"
- YDRV="${DEV},${FS},${SPEC}"
-fi
+[ "$PUPSFS" ] && { decode_spec "$PUPSFS"; PUPSFSDEV="$DEV"; PUPSFSSPEC="$SPEC"; PUPSFS=""; }
+[ "$ZDRV" ] && { decode_spec "$ZDRV"; ZDRVDEV="$DEV"; ZDRVSPEC="$SPEC"; ZDRV=""; }
+[ "$FDRV" -a "$EXTRAFW" = "yes" ] && { decode_spec "$FDRV"; FDRVDEV="$DEV"; FDRVSPEC="$SPEC"; FDRV=""; }	
+[ "$ADRV" ] && { decode_spec "$ADRV"; ADRVDEV="$DEV"; ADRVSPEC="$SPEC"; ADRV=""; }
+[ "$YDRV" ] && { decode_spec "$YDRV"; YDRVDEV="$DEV"; YDRVSPEC="$SPEC"; YDRV=""; }
 
 #first look inside initrd...
 [ -f /${PUPXXXSFS} ] && PUPSFS="rootfs,rootfs,/${PUPXXXSFS}"
