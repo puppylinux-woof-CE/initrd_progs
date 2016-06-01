@@ -16,7 +16,7 @@ sdir=$(dirname "$0")
 
 if [ -x "$1" ] ; then
 	# busybox path has been specified, not in initrd
-	# ex: chroot $PATH_TO_DIR/bb-create-symlinks /bin/busybox
+	# ex: [chroot $NEWROOT] [$PATH_TO/]bb-create-symlinks /bin/busybox
 	echo "Creating symlinks to $1 in $sdir"
 	alist=$($1 --list)
 	[ "x$alist" = "x" ] && alist="$applet_list"
