@@ -118,10 +118,21 @@ if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	esac
 fi
 
+set_pkgs() {
+	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
+	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
+		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+	fi
+	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
+}
+
 download_pkgs() {
 	. ./func #retrieve
-	find pkg -type f -name '*.petbuild' | sort | \
-	while read file ; do
+	set_pkgs
+	for init_pkg in ${PACKAGES} ; do
+		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
+		file=$(ls pkg/${init_pkg}/*.petbuild)
+		[ -f "$file" ] || continue
 		URL=$(grep '^URL=' $file | sed 's|.*=||')
 		SRC=$(grep '^SRC=' $file | sed 's|.*=||')
 		VER=$(grep '^VER=' $file | sed 's|.*=||')
@@ -296,12 +307,8 @@ build_pkgs() {
 	echo "building packages for the initial ram disk"
 	echo
 	sleep 1
-	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
-	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
-		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
-	fi
+	set_pkgs
 	for init_pkg in ${PACKAGES} ; do
-		unset BIN_PATH LIB_PATH CCOMP_INCLUDE CCOMP_INCLUDE_ONLY
 		if [ -f .fatal ] ; then
 			echo "Exiting.." ; rm -f .fatal
 			exit 1
