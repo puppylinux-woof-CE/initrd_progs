@@ -5,7 +5,7 @@
 . ../../func
 . ../../build.conf
 
-URL=http://triptico.com/download/
+URL=http://triptico.com/download
 SRC=mp
 PKG=mp_static
 VER=3.3.18b

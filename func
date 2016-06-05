@@ -2,14 +2,23 @@
 # functions library
 # this is sourced from <app>_static/<awk>_static.petbuild
 
+[ -f ./build.conf ] && build_conf='./build.conf'
 [ -f ../build.conf ] && build_conf='../build.conf'
 [ -f ../../build.conf ] && build_conf='../../build.conf' #*
 [ -f ../../../build.conf ] && build_conf='../../../build.conf'
 [ -f ../../../../build.conf ] && build_conf='../../../../build.conf'
-. ${build_conf}
-echo
-echo "main dir is $MWD" #MWD is set in build.sh
-echo
+
+if [ -f "$build_conf" ] ; then
+	. ${build_conf}
+else
+	exit 1
+fi
+
+if [ -d "$MWD" ] ; then
+	echo
+	echo "main dir is $MWD" #MWD is set in build.sh
+	echo
+fi
 
 function set_arch() {
 	ARCH=`uname -m`
@@ -25,8 +34,7 @@ function set_arch() {
 }
 set_arch
 
-if [ -d "$XPATH" ] ; then
-	#XPATH is set in build.sh
+if [ -d "$XPATH" ] ; then #set in build.sh
 	export PATH=${XPATH}/bin:$PATH # _configure _make _install
 fi
 
@@ -47,9 +55,11 @@ function retrieve() {
 		local FILE=${SOURCE##*/}
 	esac
 	if [ -f ${MWD}/0sources/${FILE} ] ; then
-		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
+		echo "Already downloaded ${FILE}"
+		[ "$DLD_ONLY" = "1" ] && exit #build.conf
 		cp -a ${MWD}/0sources/${FILE} .
 	else
+		echo "Downloading ${URL}/${FILE}"
 		wget -c --no-check-certificate ${URL}/${FILE}
 		if [ $? -ne 0 ] ; then
 			rm -f ${FILE}

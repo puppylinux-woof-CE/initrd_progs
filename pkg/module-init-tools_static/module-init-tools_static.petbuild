@@ -7,7 +7,7 @@
 
 # GOES TO INITRD
 
-URL=https://www.kernel.org/pub/linux/utils/kernel/module-init-tools/
+URL=https://www.kernel.org/pub/linux/utils/kernel/module-init-tools
 SRC=module-init-tools
 PKG=module-init-tools_static
 VER=3.15

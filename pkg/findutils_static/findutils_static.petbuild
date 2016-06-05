@@ -10,7 +10,7 @@
 URL=http://ftp.gnu.org/gnu/findutils
 SRC=findutils
 PKG=findutils_static
-VER=4.6.0 #previous versions don't work with musl libc
+VER=4.6.0
 COMP=tar.gz
 DESC=""
 DEPS=

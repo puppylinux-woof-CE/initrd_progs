@@ -26,6 +26,7 @@ Usage:
   -arch target: compile for target arch
   -sysgcc     : use system gcc
   -cross      : use the cross compilers from Aboriginal Linux
+  -download   : download pkgs only, this overrides other options
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -71,6 +72,10 @@ while [ "$1" ] ; do
 			INITRD_COMP=$1
 			shift
 			;;
+		-download)
+			export DLD_ONLY=1
+			shift
+			;;
 		-h|-help|--help)
 			help_msg
 			exit
@@ -113,6 +118,19 @@ if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	esac
 fi
 
+download_pkgs() {
+	. ./func #retrieve
+	find pkg -type f -name '*.petbuild' | sort | \
+	while read file ; do
+		URL=$(grep '^URL=' $file | sed 's|.*=||')
+		SRC=$(grep '^SRC=' $file | sed 's|.*=||')
+		VER=$(grep '^VER=' $file | sed 's|.*=||')
+		COMP=$(grep '^COMP=' $file | sed 's|.*=||')
+		( retrieve ${SRC}-${VER}.${COMP} )
+	done
+	exit #after running this func
+}
+
 ###################################################################
 #							MAIN
 ###################################################################
@@ -124,6 +142,9 @@ if [ "$USE_SYS_GCC" = "1" ] ; then
 	echo "* Using system gcc"
 	echo
 	sleep 1.5
+
+	[ "$DLD_ONLY" = "1" ] && download_pkgs
+
 else
 
 	#############################
@@ -218,8 +239,12 @@ else
 			echo "failed to download ${PACKAGE}"
 			exit 1
 		fi
+	else
+		echo "Already downloaded ${PACKAGE}"
 	fi
-	[ "$DLD_ONLY" = "1" ] && return 0
+
+	[ "$DLD_ONLY" = "1" ] && download_pkgs
+
 	## extract
 	if [ ! -d "$CCOMP_DIR" ] ; then
 		tar --directory=$PWD -xaf 0sources/${PACKAGE}
@@ -230,7 +255,6 @@ else
 			exit 1
 		fi
 	fi
-	echo ; echo "successfully downloaded and extracted ${PACKAGE}"
 	#-------------------------------------------------------------
 
 	[ ! -d "$CCOMP_DIR" ] && { echo "$CCOMP_DIR not found"; exit 1; }
@@ -267,14 +291,10 @@ function check_bin() {
 
 build_pkgs() {
 	rm -f .fatal
-	if [ "$DLD_ONLY" = "1" ] ; then
-		echo "Downloading packages only" ; echo
-	else
-		echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-		echo
-		echo "building packages for the initial ram disk"
-		echo
-	fi
+	echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+	echo
+	echo "building packages for the initial ram disk"
+	echo
 	sleep 1
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
 	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
@@ -295,14 +315,9 @@ build_pkgs() {
 		####
 		echo
 		cd pkg/${init_pkg}
-		if [ "$DLD_ONLY" = "1" ] ; then
-			echo
-			echo "downloading $init_pkg"
-		else
-			echo "+=============================================================================+"
-			echo
-			echo "building $init_pkg"
-		fi
+		echo "+=============================================================================+"
+		echo
+		echo "building $init_pkg"
 		sleep 1
 		mkdir -p ${MWD}/00_${ARCH}/log
 		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
@@ -325,9 +340,7 @@ build_pkgs() {
 build_pkgs
 cd ${MWD}
 
-rm -f .fatal #comment out to debug
-
-[ "$DLD_ONLY" = "1" ] && exit
+rm -f .fatal
 
 suspicious=$(
 	ls 00_${ARCH}/bin/* | \

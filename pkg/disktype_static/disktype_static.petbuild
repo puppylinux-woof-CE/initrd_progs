@@ -5,7 +5,7 @@
 . ../../func
 . ../../build.conf
 
-export URL=http://distro.ibiblio.org/puppylinux/sources/d/
+URL=http://distro.ibiblio.org/puppylinux/sources/d
 PKG=disktype_static
 SRC=disktype
 VER=9-patched_pardus_bk

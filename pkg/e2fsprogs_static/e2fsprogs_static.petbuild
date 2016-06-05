@@ -7,7 +7,7 @@
 
 # GOES TO INITRD
 
-URL=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.43/
+URL=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.43
 SRC=e2fsprogs
 PKG=e2fsprogs_static
 VER=1.43

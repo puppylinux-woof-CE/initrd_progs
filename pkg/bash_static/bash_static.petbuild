@@ -49,7 +49,7 @@ package() {
 }
 
 # main
-retrieve "${SRC}-${VER}.${COMP} --no-check-certificate"
+retrieve ${SRC}-${VER}.${COMP}
 extract ${SRC}-${VER}.${COMP}
 build
 package

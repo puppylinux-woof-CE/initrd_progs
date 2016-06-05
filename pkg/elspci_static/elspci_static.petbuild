@@ -7,7 +7,7 @@
 
 # GOES TO INITRD
 
-URL=http://distro.ibiblio.org/puppylinux/sources/e/
+URL=http://distro.ibiblio.org/puppylinux/sources/e
 SRC=elspci
 PKG=elspci_static
 VER=1.1

@@ -10,9 +10,9 @@
 . ../../func
 . ../../build.conf
 
-URL=http://busybox.net/downloads/
+URL=http://busybox.net/downloads
 PKG=busybox_static
-SRC_PKG=busybox
+SRC=busybox
 VER=1.24.2
 COMP=tar.bz2
 DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
@@ -20,7 +20,7 @@ DEPS=
 CAT=BuildingBlock
 
 build() {
-	cd ${SRC_PKG}-${VER}
+	cd ${SRC}-${VER}
 	# diff -Naur busybox-1.24.2 busybox-1.24.2_patched > busybox.patch
 	for p in $(ls ../patches/*.patch 2>/dev/null | sort) ; do
 		patch -p1 < $p
@@ -42,7 +42,7 @@ build() {
 	fi
 	cd -
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin
-	_install ${SRC_PKG}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
+	_install ${SRC}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
 	install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
 }
@@ -54,14 +54,14 @@ package() {
 	install -m 0644 DOTconfig ./${PKG}-${VER}-${ARCH}/build
 	# move, don't package
 	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../../00_${ARCH}
-	rm -r ${SRC_PKG}-${VER}
+	rm -r ${SRC}-${VER}
 	rm -r ${PKG}-${VER}-$ARCH
 	echo "moved to initrd"
 	echo "done!"
 }
 
 # main
-retrieve ${SRC_PKG}-${VER}.${COMP}
-extract ${SRC_PKG}-${VER}.${COMP}
+retrieve ${SRC}-${VER}.${COMP}
+extract ${SRC}-${VER}.${COMP}
 build
 package
