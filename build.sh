@@ -41,50 +41,21 @@ Usage:
 
 while [ "$1" ] ; do
 	case $1 in
-		-l|-sysgcc)
-			USE_SYS_GCC=1
-			which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
-			shift
-			;;
-		-cross)
-			CROSS_COMPILE=1
-			shift
-			;;
-		-all)
-			FORCE_BUILD_ALL=1
-			shift
-			;;
-		-copyall)
-			COPY_ALL_BINARIES=1
-			shift
-			;;
-		-pkg)
-			[ "$2" = "" ] && { echo "Specify a pkg to compile" ; exit 1; }
-			BUILD_PKG="$2"
-			shift 2
-			;;
-		-arch)
-			[ "$2" = "" ] && { echo "Specify a target arch" ; exit 1; }
-			TARGET_ARCH="$2"
-			shift 2
-			;;
-		gz|xz)
-			INITRD_COMP=$1
-			shift
-			;;
-		-download)
-			export DLD_ONLY=1
-			shift
-			;;
-		-h|-help|--help)
-			help_msg
-			exit
-			;;
+		-sysgcc)   USE_SYS_GCC=1       ; shift ;;
+		-cross)    CROSS_COMPILE=1     ; shift ;;
+		-all)      FORCE_BUILD_ALL=1   ; shift ;;
+		-copyall)  COPY_ALL_BINARIES=1 ; shift ;;
+		gz|xz)     INITRD_COMP=$1      ; shift ;;
+		-download) export DLD_ONLY=1   ; shift ;;
+		-pkg)      BUILD_PKG="$2"      ; shift 2
+			       [ "$BUILD_PKG" = "" ] && { echo "Specify a pkg to compile" ; exit 1; } ;;
+		-arch)     TARGET_ARCH="$2"    ; shift 2
+			       [ "$TARGET_ARCH" = "" ] && { echo "Specify a target arch" ; exit 1; } ;;
+		-h|-help|--help) help_msg ; exit ;;
 		-clean)
 			echo -e "\nWe're going to remove some unneeded files"
 			echo -e "and move some generated dirs to ../initrd_temp"
-			echo -e "Press P and hit enter to proceed, any other combination to cancel.."
-			read zz
+			echo -e "Press P and hit enter to proceed, any other combination to cancel.." ; read zz
 			case $zz in p|P)
 				mkdir -p ../initrd_temp
 				mv -f 00_* ../initrd_temp
@@ -147,13 +118,13 @@ download_pkgs() {
 ###################################################################
 
 if [ "$USE_SYS_GCC" = "1" ] ; then
+	which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
 	echo
 	echo "Building in: $ARCH"
 	echo
 	echo "* Using system gcc"
 	echo
 	sleep 1.5
-
 	[ "$DLD_ONLY" = "1" ] && download_pkgs
 
 else
@@ -181,7 +152,7 @@ else
 				break
 			fi
 		done
-		if [ "$VALID_TARGET_ARCH" = "" ] ; then
+		if [ "$VALID_TARGET_ARCH" != "1" ] ; then
 			echo "Invalid target arch: $TARGET_ARCH"
 			exit 1
 		else
@@ -420,6 +391,7 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 			*) rm -fv bin/${app} ;;
 		esac
 	done
+
 	if [ -f ../0initrd/DISTRO_SPECS ] ; then
 		cp -fv ../0initrd/DISTRO_SPECS .
 		. ../0initrd/DISTRO_SPECS
@@ -429,11 +401,13 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 		cp -fv ${DS} .
 		. ${DS}
 	fi
+
 	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
 	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
 	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
 	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
 	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
+
 	( 
 		cd bin
 		sh bb-create-symlinks 2>/dev/null
@@ -481,7 +455,7 @@ fi
 
 pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 rm -f ${pkgx%.*}.*
-echo -en "\nCreating $pkgx..."
+echo -en "\n** Creating $pkgx..."
 tar zcf $pkgx ${INITRD_FILE} 00_${ARCH}
 echo
 

@@ -8,7 +8,6 @@
 ## http://wiki.musl-libc.org/wiki/Building_Busybox
 
 . ../../func
-. ../../build.conf
 
 URL=http://busybox.net/downloads
 PKG=busybox_static

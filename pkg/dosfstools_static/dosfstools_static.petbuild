@@ -2,7 +2,6 @@
 # https://github.com/dosfstools/dosfstools
 
 . ../../func
-. ../../build.conf
 
 URL=https://github.com/dosfstools/dosfstools/releases/download/v4.0
 SRC=dosfstools

@@ -3,7 +3,6 @@
 # Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../../func
-. ../../build.conf
 
 # GOES TO INITRD
 

@@ -3,7 +3,6 @@
 #http://triptico.com/software/mp.html
 
 . ../../func
-. ../../build.conf
 
 URL=http://triptico.com/download
 SRC=mp

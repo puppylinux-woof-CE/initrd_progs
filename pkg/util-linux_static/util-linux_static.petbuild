@@ -5,7 +5,6 @@
 # https://forums.gentoo.org/viewtopic-t-824934-start-0.html
 
 . ../../func
-. ../../build.conf
 
 # GOES TO INITRD
 
