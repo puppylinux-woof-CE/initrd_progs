@@ -8,8 +8,8 @@ ARCH_LIST="default i486 x86_64 armv4l armv6l"
 ARCH_LIST_EX="i486 i586 i686 x86_64 armv4l armv4tl armv5l armv6l m68k mips mips64 mipsel powerpc powerpc-440fp sh2eb sh2elf sh4 sparc"
 
 if ! which make &>/dev/null ; then
-	echo "It looks like development tools are not installed.."
-	echo "Press enter to continue, CTRL-C to cancel" ; read zzz
+	echo "It looks like development tools are not installed.. stopping"
+	exit 1
 fi
 
 help_msg() {
@@ -29,6 +29,7 @@ Usage:
   -cross      : use the cross compilers from Aboriginal Linux
   -download   : download pkgs only, this overrides other options
   -specs file : DISTRO_SPECS file to use
+  -auto       : don't prompt for input
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -41,6 +42,8 @@ Usage:
 "
 }
 
+PROMPT=1
+
 while [ "$1" ] ; do
 	case $1 in
 		-sysgcc)   USE_SYS_GCC=1       ; shift ;;
@@ -49,6 +52,7 @@ while [ "$1" ] ; do
 		-copyall)  COPY_ALL_BINARIES=1 ; shift ;;
 		gz|xz)     INITRD_COMP=$1      ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
+		-auto)     PROMPT=0            ; shift ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
 			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
 		-arch)     TARGET_ARCH="$2"    ; shift 2
@@ -143,7 +147,11 @@ else
 			echo -e "*** The cross-compilers from aboriginal linux"
 			echo -e "*** work in x86 systems only, I guess."
 			echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
-			echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
+			if [ "$PROMPT" = "1" ] ; then
+				echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
+			else
+				exit 1
+			fi
 	esac
 
 	#--------------------------------------------------
@@ -164,7 +172,7 @@ else
 		fi
 	fi
 
-	if [ "$VALID_TARGET_ARCH" = "" ] ; then
+	if [ "$VALID_TARGET_ARCH" != "1" -a "$PROMPT" = "1" ] ; then
 		echo
 		echo "We're going to compile apps for the init ram disk"
 		echo "Select the arch you want to compile to"
@@ -205,7 +213,7 @@ else
 		esac
 	fi
 	echo
-	echo "OK: $ARCH"
+	echo "Arch: $ARCH"
 	sleep 1.5
 
 	#--------------------------------------------------
@@ -218,7 +226,7 @@ else
 	## download
 	if [ ! -f "0sources/${PACKAGE}" ];then
 		echo "Download cross compiler from Aboriginal Linux"
-		echo -n "Press enter to continue, CTRL-C to cancel..." ; read zzz
+		[ "$PROMPT" = "1" ] && echo -n "Press enter to continue, CTRL-C to cancel..." && read zzz
 		wget -c -P 0sources ${URL}/${PACKAGE}
 		if [ $? -ne 0 ] ; then
 			rm -rf ${CCOMP_DIR}
@@ -226,7 +234,7 @@ else
 			exit 1
 		fi
 	else
-		echo "Already downloaded ${PACKAGE}"
+		[ "$DLD_ONLY" = "1" ] && "Already downloaded ${PACKAGE}"
 	fi
 
 	[ "$DLD_ONLY" = "1" ] && download_pkgs
@@ -244,7 +252,9 @@ else
 	#-------------------------------------------------------------
 
 	[ ! -d "$CCOMP_DIR" ] && { echo "$CCOMP_DIR not found"; exit 1; }
-	cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
+	if [ -d cross-compiler-${ARCH}/cc/lib ] ; then
+		cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
+	fi
 	echo
 	echo "Using cross compiler from Aboriginal Linux"
 	echo
@@ -325,16 +335,18 @@ cd ${MWD}
 rm -f .fatal
 
 suspicious=$(
-	ls 00_${ARCH}/bin/* | \
-		while read bin ; do file $bin ; done | \
-			grep -E 'dynamically|shared'
+	ls 00_${ARCH}/bin/* | while read bin ; do file $bin ; done | grep -E 'dynamically|shared'
 )
 if [ "$suspicious" ] ; then
 	echo
 	echo "These files don't look good:"
 	echo "$suspicious"
 	echo
-	echo -n "Press enter to continue, CTRL-C to end here.." ; read zzz
+	if [ "$PROMPT" = "1" ] ; then
+		echo -n "Press enter to continue, CTRL-C to end here.." ; read zzz
+	else
+		exit 1
+	fi
 fi
 
 #----------------------------------------------------
@@ -351,7 +363,7 @@ INITRD_FILE="initrd.${INITRD_COMP}"
 
 if [ "$INITRD_CREATE" = "1" ] ; then
 	echo
-	echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." ; read zzz
+	[ "$PROMPT" = "1" ] && echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
 	echo
 	echo "============================================"
 	echo "Now creating the initial ramdisk (${INITRD_FILE}) (for 'huge' kernels)"
@@ -432,11 +444,13 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 		fi
 	)
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
-	echo
-	echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
-	echo
-	echo -n "Press ENTER to generate ${INITRD_FILE} ..." ; read zzz
-	echo
+	if [ "$PROMPT" = "1" ] ; then
+		echo
+		echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
+		echo
+		echo -n "Press ENTER to generate ${INITRD_FILE} ..." ; read zzz
+		echo
+	fi
 	####
 	find . | cpio -o -H newc > ../initrd
 	cd ..
