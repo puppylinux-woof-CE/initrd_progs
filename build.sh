@@ -353,22 +353,21 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	echo "Now creating the initial ramdisk (${INITRD_FILE}) (for 'huge' kernels)"
 	echo "============================================"
 	echo
-	initrdtree=$(find 0initrd -maxdepth 1 -name 'initrd-tree*')
+
 	rm -rf ZZ_initrd-expanded
 	mkdir -p ZZ_initrd-expanded
-	tar --directory=ZZ_initrd-expanded --strip=1 -zxf ${initrdtree}
-	tar --directory=ZZ_initrd-expanded -zxf 0initrd/dev.tar.gz
-	tar --directory=ZZ_initrd-expanded -zxf 0initrd/lib.tar.gz
-	tar --directory=ZZ_initrd-expanded -zxf 0initrd/terminfo.tar.gz
+	cp -rf 0initrd/* ZZ_initrd-expanded
+	find ZZ_initrd-expanded -type f -name '*MARKER' -delete
+	cd ZZ_initrd-expanded
+	[ -f dev.tar.gz ] && tar -zxf dev.tar.gz && rm -f dev.tar.gz
 
 	if [ "$COPY_ALL_BINARIES" = "1" ] ; then
-		cp -av --remove-destination 00_${ARCH}/bin/* ZZ_initrd-expanded/bin
+		cp -av --remove-destination ../00_${ARCH}/bin/* bin
 	else
 		for PROG in ${INITRD_PROGS} ; do
 			case $PROG in ""|'#'*) continue ;; esac
-			if [ -f 00_${ARCH}/bin/${PROG} ] ; then
-				cp -av --remove-destination \
-					00_${ARCH}/bin/${PROG} ZZ_initrd-expanded/bin
+			if [ -f ../00_${ARCH}/bin/${PROG} ] ; then
+				cp -av --remove-destination ../00_${ARCH}/bin/${PROG} bin
 			else
 				echo "WARNING: 00_${ARCH}/bin/${PROG} not found"
 			fi
@@ -376,8 +375,6 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	fi
 
 	echo
-	cd ZZ_initrd-expanded
-
 	if [ ! -f "$DISTRO_SPECS" ] ; then
 		if [ -f ../0initrd/DISTRO_SPECS ] ; then
 			DISTRO_SPECS='../0initrd/DISTRO_SPECS'
@@ -388,13 +385,9 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	fi
 	cp -fv "${DISTRO_SPECS}" .
 	. "${DISTRO_SPECS}"
-
-	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
-	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
-	[ -d ../0initrd/sbin ] && cp -rfv ../0initrd/sbin .
-	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
+	
 	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
-
+	cp -fv ../pkg/busybox_static/bb-delete-symlinks bin # could contain updates
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	if [ "$PROMPT" = "1" ] ; then
