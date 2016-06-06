@@ -61,16 +61,8 @@ while [ "$1" ] ; do
 			       [ ! -f "$DISTRO_SPECS" ] && { echo "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ; exit 1; } ;;
 		-h|-help|--help) help_msg ; exit ;;
 		-clean)
-			echo -e "\nWe're going to remove some unneeded files"
-			echo -e "and move some generated dirs to ../initrd_temp"
 			echo -e "Press P and hit enter to proceed, any other combination to cancel.." ; read zz
-			case $zz in p|P)
-				mkdir -p ../initrd_temp
-				mv -f 00_* ../initrd_temp
-				mv -f 0sources ../initrd_temp
-				mv -f cross-compiler* ../initrd_temp
-				rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler*
-			esac
+			case $zz in p|P) echo rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler* ;; esac
 			exit
 			;;
 		*)
@@ -156,10 +148,7 @@ else
 	#--------------------------------------------------
 	if [ "$TARGET_ARCH" != "" ] ; then
 		for a in $ARCH_LIST ; do
-			if [ "$TARGET_ARCH" = "$a" ] ; then
-				VALID_TARGET_ARCH=1
-				break
-			fi
+			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=1 && break
 		done
 		if [ "$VALID_TARGET_ARCH" != "1" ] ; then
 			echo "Invalid target arch: $TARGET_ARCH"
@@ -187,10 +176,7 @@ else
 		echo -n "Enter your choice: " ; read choice
 		x=1
 		for a in $ARCH_LIST ; do
-			if [ "$x" = "$choice" ] ; then
-				selected_arch=$a
-				break
-			fi
+			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
 		done
 		#-
@@ -368,10 +354,6 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	echo "============================================"
 	echo
 	initrdtree=$(find 0initrd -maxdepth 1 -name 'initrd-tree*')
-	if [ ! -f "$initrdtree"  ] ; then
-		echo "Need initrd-tree0 from woof ce"
-		exit 1
-	fi
 	rm -rf ZZ_initrd-expanded
 	mkdir -p ZZ_initrd-expanded
 	tar --directory=ZZ_initrd-expanded --strip=1 -zxf ${initrdtree}
@@ -394,17 +376,7 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	fi
 
 	echo
-	rm -f ZZ_initrd-expanded/bin/readme
 	cd ZZ_initrd-expanded
-	for app in awk sed ; do
-		[ -f bin/${app} ] || continue
-		echo -n "Use busybox ${app} instead of the full version? [Y/n]: "
-		read answer
-		case $answer in
-			n|N) echo -n ;;
-			*) rm -fv bin/${app} ;;
-		esac
-	done
 
 	if [ ! -f "$DISTRO_SPECS" ] ; then
 		if [ -f ../0initrd/DISTRO_SPECS ] ; then
@@ -423,24 +395,7 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	[ -d ../0initrd/usr ] && cp -rfv ../0initrd/usr .
 	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
 
-	( 
-		cd bin
-		sh bb-create-symlinks 2>/dev/null
-		if [ -f bash ] ; then
-			echo -n "Use bash as the init shell? [y/N]: " ; read answer
-			case $answer in
-				y|Y) rm -f sh ; ln -sv bash sh ;;
-				*)
-					rm -f sh ; ln -sv busybox sh
-					echo -n "Remove bash? [Y/n]: " ; read answer
-					case $answer in
-						n|N) echo -n ;;
-						*) rm -fv bash ;;
-					esac
-					;;
-			esac
-		fi
-	)
+	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 	if [ "$PROMPT" = "1" ] ; then
 		echo
@@ -473,7 +428,7 @@ fi
 pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 rm -f ${pkgx%.*}.*
 echo -en "\n** Creating $pkgx..."
-tar zcf $pkgx ${INITRD_FILE} 00_${ARCH}
+tar zcf $pkgx 00_${ARCH}
 echo
 
 echo
