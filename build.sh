@@ -30,6 +30,8 @@ Usage:
   -download   : download pkgs only, this overrides other options
   -specs file : DISTRO_SPECS file to use
   -auto       : don't prompt for input
+  -gz         : use gz compression for the initrd
+  -xz         : use xz compression for the initrd
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -50,7 +52,7 @@ while [ "$1" ] ; do
 		-cross)    CROSS_COMPILE=1     ; shift ;;
 		-all)      FORCE_BUILD_ALL=1   ; shift ;;
 		-copyall)  COPY_ALL_BINARIES=1 ; shift ;;
-		gz|xz)     INITRD_COMP=$1      ; shift ;;
+	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
 		-auto)     PROMPT=0            ; shift ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
@@ -59,7 +61,7 @@ while [ "$1" ] ; do
 			       [ "$TARGET_ARCH" = "" ] && { echo "$0 -arch: Specify a target arch" ; exit 1; } ;;
 		-specs)    DISTRO_SPECS="$2"    ; shift 2
 			       [ ! -f "$DISTRO_SPECS" ] && { echo "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ; exit 1; } ;;
-		-h|-help|--help) help_msg ; exit ;;
+	-h|-help|--help) help_msg ; exit ;;
 		-clean)
 			echo -e "Press P and hit enter to proceed, any other combination to cancel.." ; read zz
 			case $zz in p|P) echo rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler* ;; esac
@@ -86,7 +88,25 @@ if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	esac
 fi
 
-set_pkgs() {
+function select_keymap() {
+	#must be in $MWD and ZZ_initrd-expanded must exists
+	echo -e "-- Keyboard layout for the initrd --"
+	echo -e "Type one of the following keymaps (leave empty for 'us'): \n"
+	echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
+	echo -en "\nKeymap: " ; read km
+	echo
+	if [ -f 0initrd/lib/keymaps/${km}.gz ] ; then
+		echo "* Ok, using '${km}'"
+		KEYMAP=$km
+	else
+		echo "* Using 'us'"
+		KEYMAP=us
+	fi
+	echo
+	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
+}
+
+function set_pkgs() {
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
 	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
 		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
@@ -94,7 +114,7 @@ set_pkgs() {
 	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
 }
 
-download_pkgs() {
+function download_pkgs() {
 	. ./func #retrieve
 	set_pkgs
 	for init_pkg in ${PACKAGES} ; do
@@ -358,6 +378,11 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	mkdir -p ZZ_initrd-expanded
 	cp -rf 0initrd/* ZZ_initrd-expanded
 	find ZZ_initrd-expanded -type f -name '*MARKER' -delete
+
+	#------------
+	select_keymap
+	#------------
+
 	cd ZZ_initrd-expanded
 	[ -f dev.tar.gz ] && tar -zxf dev.tar.gz && rm -f dev.tar.gz
 
