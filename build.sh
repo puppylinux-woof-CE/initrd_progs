@@ -81,10 +81,7 @@ while [ "$1" ] ; do
 done
 
 ARCH=`uname -m`
-case $ARCH in
-	arm*) ARCH=armv6l ;; # newest supported
-	*)    ARCH=$ARCH ;;
-esac
+OS_ARCH=$ARCH
 
 if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	# the cross compilers from landley.net were compiled on x86
@@ -199,19 +196,20 @@ else
 		#-
 		case $selected_arch in
 			default|"")ok=1 ;;
-			*)
-				case $ARCH in i?86)
-					case $selected_arch in *64)
-						echo
-						echo "*** Trying to compile for a 64bit arch in a 32bit system?"
-						echo "*** That's not possible.. exiting.."
-						exit 1
-					esac
-				esac
-				ARCH=$selected_arch
-				;;
+			*) ARCH=$selected_arch ;;
 		esac
 	fi
+
+	case $OS_ARCH in
+		*64) ok=1 ;;
+		*)
+			case $ARCH in *64)
+				echo -e "\n*** Trying to compile for a 64bit arch in a 32bit system?"
+				echo -e "*** That's not possible.. exiting.."
+				exit 1
+			esac
+			;;
+	esac
 	echo
 	echo "Arch: $ARCH"
 	sleep 1.5

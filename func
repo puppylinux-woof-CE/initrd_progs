@@ -22,10 +22,6 @@ fi
 
 function set_arch() {
 	ARCH=`uname -m`
-	case $ARCH in
-		arm*) ARCH=armv6l ;; # newest supported
-		*)    ARCH=$ARCH ;;
-	esac
 	[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
 	case $ARCH in
 		*64) LIBDIR=lib64 ;;
