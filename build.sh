@@ -14,6 +14,7 @@ fi
 
 help_msg() {
 	echo "Build static apps in the queue defined in build.conf
+
 Usage:
   $0 [options]
 
@@ -27,6 +28,7 @@ Usage:
   -sysgcc     : use system gcc
   -cross      : use the cross compilers from Aboriginal Linux
   -download   : download pkgs only, this overrides other options
+  -specs file : DISTRO_SPECS file to use
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -48,9 +50,11 @@ while [ "$1" ] ; do
 		gz|xz)     INITRD_COMP=$1      ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
-			       [ "$BUILD_PKG" = "" ] && { echo "Specify a pkg to compile" ; exit 1; } ;;
+			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
 		-arch)     TARGET_ARCH="$2"    ; shift 2
-			       [ "$TARGET_ARCH" = "" ] && { echo "Specify a target arch" ; exit 1; } ;;
+			       [ "$TARGET_ARCH" = "" ] && { echo "$0 -arch: Specify a target arch" ; exit 1; } ;;
+		-specs)    DISTRO_SPECS="$2"    ; shift 2
+			       [ ! -f "$DISTRO_SPECS" ] && { echo "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ; exit 1; } ;;
 		-h|-help|--help) help_msg ; exit ;;
 		-clean)
 			echo -e "\nWe're going to remove some unneeded files"
@@ -392,15 +396,16 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 		esac
 	done
 
-	if [ -f ../0initrd/DISTRO_SPECS ] ; then
-		cp -fv ../0initrd/DISTRO_SPECS .
-		. ../0initrd/DISTRO_SPECS
-	else
-		[ -f /etc/DISTRO_SPECS ] && DS=/etc/DISTRO_SPECS
-		[ -f /initrd/DISTRO_SPECS ] && DS=/initrd/DISTRO_SPECS
-		cp -fv ${DS} .
-		. ${DS}
+	if [ ! -f "$DISTRO_SPECS" ] ; then
+		if [ -f ../0initrd/DISTRO_SPECS ] ; then
+			DISTRO_SPECS='../0initrd/DISTRO_SPECS'
+		else
+			[ -f /etc/DISTRO_SPECS ] && DISTRO_SPECS='/etc/DISTRO_SPECS'
+			[ -f /initrd/DISTRO_SPECS ] && DISTRO_SPECS='/initrd/DISTRO_SPECS'
+		fi
 	fi
+	cp -fv "${DISTRO_SPECS}" .
+	. "${DISTRO_SPECS}"
 
 	[ -f ../0initrd/init ] && cp -fv ../0initrd/init .
 	[ -d ../0initrd/bin ] && cp -rfv ../0initrd/bin .
