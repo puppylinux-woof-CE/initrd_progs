@@ -11,10 +11,11 @@ DEFAULT_x86=i686
 DEFAULT_ARM=armv5l
 #DEFAULT_ARM64=aarch64
 
-if ! which make &>/dev/null ; then
-	echo "It looks like development tools are not installed.. stopping"
-	exit 1
-fi
+# can be a local file or a url
+PREBUILT_BINARIES=""
+
+ARCH=`uname -m`
+OS_ARCH=$ARCH
 
 help_msg() {
 	echo "Build static apps in the queue defined in build.conf
@@ -30,6 +31,7 @@ Usage:
   -cross      : use the cross compilers from Aboriginal Linux
   -download   : download pkgs only, this overrides other options
   -specs file : DISTRO_SPECS file to use
+  -prebuilt   : use prebuilt binaries
   -auto       : don't prompt for input
   -gz         : use gz compression for the initrd
   -xz         : use xz compression for the initrd
@@ -54,6 +56,7 @@ while [ "$1" ] ; do
 		-all)      FORCE_BUILD_ALL=1   ; shift ;;
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
+		-prebuilt) USE_PREBUILT=1      ; shift ;;
 		-auto)     PROMPT=0            ; shift ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
 			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
@@ -76,9 +79,28 @@ done
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+function use_prebuilt_binaries() {
+	[ ! "$PREBUILT_BINARIES" ] && { echo "ERROR"; exit 1 ; }
+	if [ -f "$PREBUILT_BINARIES" ] ; then
+		tar -vxaf "$PREBUILT_BINARIES" || exit 1
+	else
+		mkdir -p 0sources
+		zfile=0sources/${PREBUILT_BINARIES##*/}
+		if [ ! -f "$zfile" ] ; then
+			wget -P 0sources --no-check-certificate "$PREBUILT_BINARIES"
+			[ $? -eq 0 ] || { rm -f "$zfile" ; exit 1 ; }
+		fi
+		tar -vxaf "$zfile" || exit 1
+	fi
+}
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
 function set_compiler() {
-	ARCH=`uname -m`
-	OS_ARCH=$ARCH
+	if ! which make &>/dev/null ; then
+		echo "It looks like development tools are not installed.. stopping"
+		exit 1
+	fi
 	if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 		# the cross compilers from landley.net were compiled on x86
 		# if we're using the script in a non-x86 system
@@ -299,7 +321,7 @@ function select_keymap() { #in $MWD
 
 #--
 
-function generate_inird() {
+function generate_initrd() {
 	[ "$DLD_ONLY" = "1" ] && exit
 	[ "$INITRD_CREATE" != "1" ] && echo -e "\n* Not creating initial ram disk" && exit 1
 	case ${INITRD_COMP} in
@@ -364,6 +386,8 @@ function generate_inird() {
 	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
 	echo "You can inspect ZZ_initrd-expanded to see the final results"
 
+	[ "$USE_PREBUILT" = "1" ] && return
+
 	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 	rm -f ${pkgx%.*}.*
 	tar zcf $pkgx 00_${ARCH}
@@ -378,13 +402,17 @@ function generate_inird() {
 #                 MAIN
 ###############################################
 
-set_compiler
-select_target_arch
-setup_cross_compiler
+if [ "$USE_PREBUILT" = "1" ] ; then
+	use_prebuilt_binaries
+	select_target_arch
+else
+	set_compiler
+	select_target_arch
+	setup_cross_compiler
+	build_pkgs
+	cd ${MWD}
+fi
 
-build_pkgs
-cd ${MWD}
-
-generate_inird
+generate_initrd
 
 ### END ###
