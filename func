@@ -15,9 +15,11 @@ else
 fi
 
 if [ -d "$MWD" ] ; then
-	echo
-	echo "main dir is $MWD" #MWD is set in build.sh
-	echo
+	if [ "$DLD_ONLY" != "1" ] ; then
+		echo
+		echo "main dir is $MWD" #MWD is set in build.sh
+		echo
+	fi
 fi
 
 function set_arch() {
@@ -51,8 +53,7 @@ function retrieve() {
 		local FILE=${SOURCE##*/}
 	esac
 	if [ -f ${MWD}/0sources/${FILE} ] ; then
-		echo "Already downloaded ${FILE}"
-		[ "$DLD_ONLY" = "1" ] && exit #build.conf
+		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${FILE}" && exit
 		cp -a ${MWD}/0sources/${FILE} .
 	else
 		echo "Downloading ${URL}/${FILE}"
@@ -62,7 +63,7 @@ function retrieve() {
 			exit_error 1
 		fi
 		mv -f ${FILE} ${MWD}/0sources
-		[ "$DLD_ONLY" -eq 1 ] && exit #build.conf
+		[ "$DLD_ONLY" -eq 1 ] && exit
 	fi
 }
 

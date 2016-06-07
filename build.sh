@@ -70,98 +70,50 @@ while [ "$1" ] ; do
 	esac
 done
 
-ARCH=`uname -m`
-OS_ARCH=$ARCH
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
-	# the cross compilers from landley.net were compiled on x86
-	# if we're using the script in a non-x86 system
-	# it means that the system gcc must be chosen by default
-	# perhaps we're running qemu or a native linux os
-	case $ARCH in
-		i?86|x86_64) CROSS_COMPILE=1 ;;
-		*) USE_SYS_GCC=1 ;;
-	esac
-fi
-
-function select_keymap() { #in $MWD
-	echo -e "-- Keyboard layout  --"
-	echo -e "Type one of the following keymaps (leave empty for 'us'): \n"
-	echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
-	echo -en "\nKeymap: " ; read km
-	echo
-	if [ -f 0initrd/lib/keymaps/${km}.gz ] ; then
-		echo "* Ok, using '${km}'"
-		KEYMAP=$km
+function set_compiler() {
+	ARCH=`uname -m`
+	OS_ARCH=$ARCH
+	if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
+		# the cross compilers from landley.net were compiled on x86
+		# if we're using the script in a non-x86 system
+		# it means that the system gcc must be chosen by default
+		# perhaps we're running qemu or a native linux os
+		case $ARCH in
+			i?86|x86_64) CROSS_COMPILE=1 ;;
+			*) USE_SYS_GCC=1 ;;
+		esac
+	fi
+	if [ "$USE_SYS_GCC" = "1" ] ; then
+		which gcc &>/dev/null || { echo "No gcc, aborting..." ; exit 1 ; }
+		echo -e "\nBuilding in: $ARCH"
+		echo -e "\n* Using system gcc\n"
+		sleep 1.5
 	else
-		echo "* Using 'us'"
-		KEYMAP=us
+		#   aboriginal linux   #
+		CROSS_COMPILE=1 #precaution
+		case $ARCH in
+			i?86) ARCH=i486 ;;
+			x86_64) echo -n ;;
+			*)
+				echo -e "*** The cross-compilers from aboriginal linux"
+				echo -e "*** work in x86 systems only, I guess."
+				echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
+				if [ "$PROMPT" = "1" ] ; then
+					echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
+				else
+					exit 1
+				fi
+		esac
 	fi
-	echo
-	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
 }
 
-function set_pkgs() {
-	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
-	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
-		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
-	fi
-	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
-}
+#--
 
-function download_pkgs() {
-	. ./func #retrieve
-	set_pkgs
-	for init_pkg in ${PACKAGES} ; do
-		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
-		file=$(ls pkg/${init_pkg}/*.petbuild)
-		[ -f "$file" ] || continue
-		URL=$(grep '^URL=' $file | sed 's|.*=||')
-		SRC=$(grep '^SRC=' $file | sed 's|.*=||')
-		VER=$(grep '^VER=' $file | sed 's|.*=||')
-		COMP=$(grep '^COMP=' $file | sed 's|.*=||')
-		( retrieve ${SRC}-${VER}.${COMP} )
-	done
-	exit #after running this func
-}
-
-###################################################################
-#							MAIN
-###################################################################
-
-if [ "$USE_SYS_GCC" = "1" ] ; then
-	which gcc &>/dev/null || { echo "No gcc aborting"; exit 1; }
-	echo
-	echo "Building in: $ARCH"
-	echo
-	echo "* Using system gcc"
-	echo
-	sleep 1.5
-	[ "$DLD_ONLY" = "1" ] && download_pkgs
-
-else
-
-	#############################
-	##     aboriginal linux     #
-	#############################
-	case $ARCH in
-		i?86) ARCH=i486 ;;
-		x86_64) echo -n ;;
-		*)
-			echo -e "*** The cross-compilers from aboriginal linux"
-			echo -e "*** work in x86 systems only, I guess."
-			echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
-			if [ "$PROMPT" = "1" ] ; then
-				echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
-			else
-				exit 1
-			fi
-	esac
-
-	#--------------------------------------------------
-	#             SELECT TARGET ARCH
-	#--------------------------------------------------
-	if [ "$TARGET_ARCH" != "" ] ; then
+function select_target_arch() {
+	[ "$CROSS_COMPILE" != "1" ] && return
+	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
 		for a in $ARCH_LIST ; do
 			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=1 && break
 		done
@@ -172,12 +124,10 @@ else
 			[ "$TARGET_ARCH" != "default" ] && ARCH=${TARGET_ARCH}
 		fi
 	fi
-
+	#--
 	if [ "$VALID_TARGET_ARCH" != "1" -a "$PROMPT" = "1" ] ; then
-		echo
-		echo "We're going to compile apps for the init ram disk"
-		echo "Select the arch you want to compile to"
-		echo
+		echo -e "\nWe're going to compile apps for the init ram disk"
+		echo -e "Select the arch you want to compile to\n"
 		x=1
 		for a in $ARCH_LIST ; do
 			case $a in
@@ -187,20 +137,18 @@ else
 			let x++
 		done
 		echo "	*) default [${ARCH}]"
-		echo
-		echo -n "Enter your choice: " ; read choice
+		echo -en "\nEnter your choice: " ; read choice
 		x=1
 		for a in $ARCH_LIST ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
 		done
-		#-
 		case $selected_arch in
 			default|"")ok=1 ;;
 			*) ARCH=$selected_arch ;;
 		esac
 	fi
-
+	#--
 	case $OS_ARCH in
 		*64) ok=1 ;;
 		*)
@@ -214,10 +162,13 @@ else
 	echo
 	echo "Arch: $ARCH"
 	sleep 1.5
+}
 
-	#--------------------------------------------------
-	#      CROSS COMPILER FROM ABORIGINAL LINUX
-	#--------------------------------------------------
+#--
+
+function setup_cross_compiler() {
+	# Aboriginal Linux #
+	[ "$CROSS_COMPILE" != "1" ] && return
 	CCOMP_DIR=cross-compiler-${ARCH}
 	URL=http://landley.net/aboriginal/downloads/binaries
 	PACKAGE=${CCOMP_DIR}.tar.gz
@@ -233,11 +184,9 @@ else
 			exit 1
 		fi
 	else
-		[ "$DLD_ONLY" = "1" ] && "Already downloaded ${PACKAGE}"
+		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${PACKAGE}"
 	fi
-
-	[ "$DLD_ONLY" = "1" ] && download_pkgs
-
+	[ "$DLD_ONLY" = "1" ] && return
 	## extract
 	if [ ! -d "$CCOMP_DIR" ] ; then
 		tar --directory=$PWD -xaf 0sources/${PACKAGE}
@@ -248,8 +197,7 @@ else
 			exit 1
 		fi
 	fi
-	#-------------------------------------------------------------
-
+	#--
 	[ ! -d "$CCOMP_DIR" ] && { echo "$CCOMP_DIR not found"; exit 1; }
 	if [ -d cross-compiler-${ARCH}/cc/lib ] ; then
 		cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
@@ -258,14 +206,11 @@ else
 	export OVERRIDE_ARCH=${ARCH}     # = cross compiling
 	export XPATH=${PWD}/${CCOMP_DIR} # = cross compiling
 	# see ./func
-fi
+}
 
-#----------------------------------------------
-mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
-#----------------------------------------------
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 function check_bin() {
-	local init_pkg=$1
 	case $init_pkg in
 		""|'#'*) continue ;;
 		coreutils_static) static_bins='cp' ;;
@@ -278,46 +223,42 @@ function check_bin() {
 		*) static_bins=${init_pkg%_*} ;;
 	esac
 	for sbin in ${static_bins} ; do
-		ls ./00_${ARCH}/bin | grep -q "^${sbin}" || return 1
+		[ -f ./00_${ARCH}/bin/${sbin} ] || return 1
 	done
 }
 
-build_pkgs() {
+#--
+
+function build_pkgs() {
 	rm -f .fatal
-	echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-	echo
-	echo "building packages for the initial ram disk"
-	echo
-	sleep 1
-	set_pkgs
-	for init_pkg in ${PACKAGES} ; do
-		if [ -f .fatal ] ; then
-			echo "Exiting.." ; rm -f .fatal
-			exit 1
-		fi
-		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
-		check_bin $init_pkg
-		if [ $? -eq 0 ] ; then ##found
-			echo "$init_pkg exists ... skipping"
-			continue
-		fi
-		####
-		echo
-		cd pkg/${init_pkg}
-		echo "+=============================================================================+"
-		echo
-		echo "building $init_pkg"
+	if [ "$DLD_ONLY" != "1" ] ; then
+		echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+		echo -e "\nbuilding packages for the initial ram disk\n"
 		sleep 1
+	fi
+	#--
+	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
+	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
+		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+	fi
+	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
+	#--
+	for init_pkg in ${PACKAGES} ; do
+		[ -f .fatal ] && { echo "Exiting.." ; rm -f .fatal ; exit 1 ; }
+		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
+		if [ "$DLD_ONLY" != "1" ] ; then
+			check_bin $init_pkg
+			[ $? -eq 0 ] && { echo "$init_pkg exists ... skipping" ; continue ; }
+			echo -e "\n+=============================================================================+"
+			echo -e "\nbuilding $init_pkg"
+			sleep 1
+		fi
+		#--
+		cd pkg/${init_pkg}
 		mkdir -p ${MWD}/00_${ARCH}/log
 		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
-		if [ "$?" -eq 1 ];then 
-			echo "$pkg build failure"
-			case $HALT_ERRS in
-				0) exit 1 ;;
-			esac
-		fi
 		cd ${MWD}
-		## extra check
+		[ "$DLD_ONLY" != "1" ] && continue
 		check_bin $init_pkg
 		if [ $? -ne 0 ] ; then ##not found
 			echo "target binary does not exist..."
@@ -327,31 +268,40 @@ build_pkgs() {
 	rm -f .fatal
 }
 
-build_pkgs
-cd ${MWD}
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-#----------------------------------------------------
-#            create initial ramdisk
-#----------------------------------------------------
-
-[ "$INITRD_CREATE" != "1" ] && echo -e "\n* Not creating initial ram disk" && exit 1
-
-case ${INITRD_COMP} in
-	gz|xz) ok=1 ;;
-	*) INITRD_COMP="gz" ;; #precaution
-esac
-
-INITRD_FILE="initrd.${INITRD_COMP}"
-[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
-
-if [ "$INITRD_CREATE" = "1" ] ; then
+function select_keymap() { #in $MWD
+	[ "$PROMPT" != "1" ] && return
+	echo -e "-- Keyboard layout  --"
+	echo -e "Type one of the following keymaps (leave empty for default keymap): \n"
+	echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
+	echo -en "\nKeymap: " ; read km
 	echo
-	[ "$PROMPT" = "1" ] && echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
-	echo
-	echo "============================================"
+	[ -f 0initrd/lib/keymaps/${km}.gz ] && KEYMAP=$km
+	case $KEYMAP in
+		en|us|"") echo "Using default keymap" ; return ;;
+		*) echo "OK, using '${KEYMAP}'" ;;
+	esac
+	sleep 0.5
+	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
+}
+
+#--
+
+function generate_inird() {
+	[ "$DLD_ONLY" = "1" ] && exit
+	[ "$INITRD_CREATE" != "1" ] && echo -e "\n* Not creating initial ram disk" && exit 1
+	case ${INITRD_COMP} in
+		gz|xz) ok=1 ;;
+		*) INITRD_COMP="gz" ;; #precaution
+	esac
+	INITRD_FILE="initrd.${INITRD_COMP}"
+	[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
+
+	[ "$PROMPT" = "1" ] && echo -en "\nPress enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
+	echo -e "\n============================================"
 	echo "Now creating the initial ramdisk (${INITRD_FILE})"
-	echo "============================================"
-	echo
+	echo -e "=============================================\n"
 
 	rm -rf ZZ_initrd-expanded
 	mkdir -p ZZ_initrd-expanded
@@ -388,8 +338,7 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	cp -fv "${DISTRO_SPECS}" .
 	. "${DISTRO_SPECS}"
 	
-	cp -fv ../pkg/busybox_static/bb-create-symlinks bin # could contain updates
-	cp -fv ../pkg/busybox_static/bb-delete-symlinks bin # could contain updates
+	cp -fv ../pkg/busybox_static/bb-*-symlinks bin # could contain updates
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 
@@ -403,17 +352,29 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	[ $? -eq 0 ] || { echo "ERROR" ; exit 1 ; }
 	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
 	echo "You can inspect ZZ_initrd-expanded to see the final results"
-fi
 
-pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
-rm -f ${pkgx%.*}.*
-tar zcf $pkgx 00_${ARCH}
+	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
+	rm -f ${pkgx%.*}.*
+	tar zcf $pkgx 00_${ARCH}
 
-echo
-echo " - Output files -"
-echo "${INITRD_FILE}: use it in a frugal install for example"
-echo "$pkgx: to store or distribute"
-echo
-echo "Finished."
+	echo -e "\n - Output files -"
+	echo "${INITRD_FILE}: use it in a frugal install for example"
+	echo "$pkgx: to store or distribute"
+	echo -e "\nFinished.\n"
+}
+
+###############################################
+#                 MAIN
+###############################################
+
+set_compiler
+select_target_arch
+setup_cross_compiler
+
+mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
+build_pkgs
+cd ${MWD}
+
+generate_inird
 
 ### END ###
