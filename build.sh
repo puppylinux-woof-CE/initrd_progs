@@ -4,8 +4,12 @@
 
 export MWD=`pwd`
 
-ARCH_LIST="default i486 x86_64 armv4l armv6l"
+ARCH_LIST="default i686 x86_64 arm" #arm64
 ARCH_LIST_EX="i486 i586 i686 x86_64 armv4l armv4tl armv5l armv6l m68k mips mips64 mipsel powerpc powerpc-440fp sh2eb sh2elf sh4 sparc"
+
+DEFAULT_x86=i686
+DEFAULT_ARM=armv5l
+#DEFAULT_ARM64=aarch64
 
 if ! which make &>/dev/null ; then
 	echo "It looks like development tools are not installed.. stopping"
@@ -94,8 +98,7 @@ function set_compiler() {
 		#   aboriginal linux   #
 		CROSS_COMPILE=1 #precaution
 		case $ARCH in
-			i?86) ARCH=i486 ;;
-			x86_64) echo -n ;;
+			i?86|x86_64) ok=1 ;;
 			*)
 				echo -e "*** The cross-compilers from aboriginal linux"
 				echo -e "*** work in x86 systems only, I guess."
@@ -112,9 +115,16 @@ function set_compiler() {
 #--
 
 function select_target_arch() {
+	#-- defaults
+	case $TARGET_ARCH in
+		x86) TARGET_ARCH=${DEFAULT_x86} ;;
+		arm) TARGET_ARCH=${DEFAULT_ARM} ;;
+		#arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
+	esac
+	#--
 	[ "$CROSS_COMPILE" != "1" ] && return
 	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
-		for a in $ARCH_LIST ; do
+		for a in $ARCH_LIST_EX ; do
 			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=1 && break
 		done
 		if [ "$VALID_TARGET_ARCH" != "1" ] ; then
@@ -139,7 +149,7 @@ function select_target_arch() {
 		echo "	*) default [${ARCH}]"
 		echo -en "\nEnter your choice: " ; read choice
 		x=1
-		for a in $ARCH_LIST ; do
+		for a in $ARCH_LIST_EX ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
 		done
@@ -231,6 +241,7 @@ function check_bin() {
 
 function build_pkgs() {
 	rm -f .fatal
+	mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
 	if [ "$DLD_ONLY" != "1" ] ; then
 		echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 		echo -e "\nbuilding packages for the initial ram disk\n"
@@ -371,7 +382,6 @@ set_compiler
 select_target_arch
 setup_cross_compiler
 
-mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
 build_pkgs
 cd ${MWD}
 
