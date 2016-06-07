@@ -389,12 +389,13 @@ function generate_initrd() {
 	[ "$USE_PREBUILT" = "1" ] && return
 
 	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
+	for PROG in ${INITRD_PROGS} ; do
+		case $PROG in ""|'#'*) continue ;; esac
+		progs2tar+=" 00_${ARCH}/bin/${PROG}"
+	done
 	rm -f ${pkgx%.*}.*
-	tar zcf $pkgx 00_${ARCH}
+	tar zcf $pkgx ${progs2tar}
 
-	echo -e "\n - Output files -"
-	echo "${INITRD_FILE}: use it in a frugal install for example"
-	echo "$pkgx: to store or distribute"
 	echo -e "\nFinished.\n"
 }
 
