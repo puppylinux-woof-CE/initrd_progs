@@ -384,7 +384,7 @@ function generate_initrd() {
 	esac
 	[ $? -eq 0 ] || { echo "ERROR" ; exit 1 ; }
 	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
-	echo "You can inspect ZZ_initrd-expanded to see the final results"
+	echo "@@ -- You can inspect ZZ_initrd-expanded to see the final results -- @@"
 
 	[ "$USE_PREBUILT" = "1" ] && return
 
@@ -394,7 +394,11 @@ function generate_initrd() {
 		progs2tar+=" 00_${ARCH}/bin/${PROG}"
 	done
 	rm -f ${pkgx%.*}.*
+	echo -e "\n** Creating $pkgx (static binaries to store somewhere)"
 	tar zcf $pkgx ${progs2tar}
+
+	echo -e "\n - INITRD -"
+	echo -e "* ${INITRD_FILE}: for ${DISTRO_NAME} ${DISTRO_VERSION} ${DISTRO_TARGETARCH}"
 
 	echo -e "\nFinished.\n"
 }
