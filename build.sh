@@ -21,9 +21,6 @@ Usage:
   Options:
   -pkg pkg    : compile specific pkg only
   -all        : force building all *_static pkgs
-  -copyall    : copy all generated binaries to the initrd
-                otherwise only the ones specified in
-                INITRD_PROGS='..' in build.conf
   -arch target: compile for target arch
   -sysgcc     : use system gcc
   -cross      : use the cross compilers from Aboriginal Linux
@@ -51,7 +48,6 @@ while [ "$1" ] ; do
 		-sysgcc)   USE_SYS_GCC=1       ; shift ;;
 		-cross)    CROSS_COMPILE=1     ; shift ;;
 		-all)      FORCE_BUILD_ALL=1   ; shift ;;
-		-copyall)  COPY_ALL_BINARIES=1 ; shift ;;
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
 		-auto)     PROMPT=0            ; shift ;;
@@ -88,9 +84,8 @@ if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
 	esac
 fi
 
-function select_keymap() {
-	#must be in $MWD and ZZ_initrd-expanded must exists
-	echo -e "-- Keyboard layout for the initrd --"
+function select_keymap() { #in $MWD
+	echo -e "-- Keyboard layout  --"
 	echo -e "Type one of the following keymaps (leave empty for 'us'): \n"
 	echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
 	echo -en "\nKeymap: " ; read km
@@ -259,9 +254,7 @@ else
 	if [ -d cross-compiler-${ARCH}/cc/lib ] ; then
 		cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
 	fi
-	echo
-	echo "Using cross compiler from Aboriginal Linux"
-	echo
+	echo -e "\nUsing cross compiler from Aboriginal Linux\n"
 	export OVERRIDE_ARCH=${ARCH}     # = cross compiling
 	export XPATH=${PWD}/${CCOMP_DIR} # = cross compiling
 	# see ./func
@@ -327,35 +320,21 @@ build_pkgs() {
 		## extra check
 		check_bin $init_pkg
 		if [ $? -ne 0 ] ; then ##not found
-			echo "target binary does not exist... exiting"
+			echo "target binary does not exist..."
 			[ "$HALT_ERRS" = "1" ] && exit 1
 		fi
 	done
+	rm -f .fatal
 }
 
 build_pkgs
 cd ${MWD}
 
-rm -f .fatal
-
-suspicious=$(
-	ls 00_${ARCH}/bin/* | while read bin ; do file $bin ; done | grep -E 'dynamically|shared'
-)
-if [ "$suspicious" ] ; then
-	echo
-	echo "These files don't look good:"
-	echo "$suspicious"
-	echo
-	if [ "$PROMPT" = "1" ] ; then
-		echo -n "Press enter to continue, CTRL-C to end here.." ; read zzz
-	else
-		exit 1
-	fi
-fi
-
 #----------------------------------------------------
 #            create initial ramdisk
 #----------------------------------------------------
+
+[ "$INITRD_CREATE" != "1" ] && echo -e "\n* Not creating initial ram disk" && exit 1
 
 case ${INITRD_COMP} in
 	gz|xz) ok=1 ;;
@@ -370,7 +349,7 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	[ "$PROMPT" = "1" ] && echo -n "Press enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
 	echo
 	echo "============================================"
-	echo "Now creating the initial ramdisk (${INITRD_FILE}) (for 'huge' kernels)"
+	echo "Now creating the initial ramdisk (${INITRD_FILE})"
 	echo "============================================"
 	echo
 
@@ -386,18 +365,16 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	cd ZZ_initrd-expanded
 	[ -f dev.tar.gz ] && tar -zxf dev.tar.gz && rm -f dev.tar.gz
 
-	if [ "$COPY_ALL_BINARIES" = "1" ] ; then
-		cp -av --remove-destination ../00_${ARCH}/bin/* bin
-	else
-		for PROG in ${INITRD_PROGS} ; do
-			case $PROG in ""|'#'*) continue ;; esac
-			if [ -f ../00_${ARCH}/bin/${PROG} ] ; then
-				cp -av --remove-destination ../00_${ARCH}/bin/${PROG} bin
-			else
-				echo "WARNING: 00_${ARCH}/bin/${PROG} not found"
-			fi
-		done
-	fi
+	for PROG in ${INITRD_PROGS} ; do
+		case $PROG in ""|'#'*) continue ;; esac
+		if [ -f ../00_${ARCH}/bin/${PROG} ] ; then
+			file ../00_${ARCH}/bin/${PROG} | grep -E 'dynamically|shared' && exit 1
+			cp -av --remove-destination ../00_${ARCH}/bin/${PROG} bin
+		else
+			echo "00_${ARCH}/bin/${PROG} not found"
+			exit 1
+		fi
+	done
 
 	echo
 	if [ ! -f "$DISTRO_SPECS" ] ; then
@@ -415,39 +392,22 @@ if [ "$INITRD_CREATE" = "1" ] ; then
 	cp -fv ../pkg/busybox_static/bb-delete-symlinks bin # could contain updates
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
-	if [ "$PROMPT" = "1" ] ; then
-		echo
-		echo "If you have anything to add or remove from ZZ_initrd-expanded do it now"
-		echo
-		echo -n "Press ENTER to generate ${INITRD_FILE} ..." ; read zzz
-		echo
-	fi
-	####
+
 	find . | cpio -o -H newc > ../initrd
 	cd ..
-	[ -f initrd.[gx]z ] && rm -fv initrd.*
+	[ -f initrd.[gx]z ] && rm -f initrd.[gx]z
 	case ${INITRD_COMP} in
 		gz) gzip -f initrd ;;
 		xz) xz --check=crc32 --lzma2 initrd ;;
-		*)  gzip -f initrd ;;
 	esac
-	if [ $? -eq 0 ] ; then
-		echo
-		echo "${INITRD_FILE} has been created"
-		echo "You can inspect ZZ_initrd-expanded to see the final results"
-	else
-		echo "ERROR" ; exit 1
-	fi
+	[ $? -eq 0 ] || { echo "ERROR" ; exit 1 ; }
 	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
-else
-	echo "Not creating ${INITRD_FILE}"
+	echo "You can inspect ZZ_initrd-expanded to see the final results"
 fi
 
 pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
 rm -f ${pkgx%.*}.*
-echo -en "\n** Creating $pkgx..."
 tar zcf $pkgx 00_${ARCH}
-echo
 
 echo
 echo " - Output files -"
