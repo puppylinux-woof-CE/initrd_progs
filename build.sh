@@ -52,6 +52,9 @@ Usage:
   -download   : download pkgs only, this overrides other options
   -specs file : DISTRO_SPECS file to use
   -prebuilt   : use prebuilt binaries
+  -lang locale: set locale
+  -keymap km  : set keyboard layout
+  -ask_keymap : even if -auto is specified
   -auto       : don't prompt for input
   -gz         : use gz compression for the initrd
   -xz         : use xz compression for the initrd
@@ -77,7 +80,12 @@ while [ "$1" ] ; do
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
 		-prebuilt) USE_PREBUILT=1      ; shift ;;
+		-ask_keymap) ASK_KEYMAP=1      ; shift ;;
 		-auto)     PROMPT=0            ; shift ;;
+		-lang)     LOCALE="$2"    ; shift 2
+			       [ "$LOCALE" = "" ] && { echo "$0 -locale: No locale specified" ; exit 1; } ;;
+		-keymap)   KEYMAP="$2"    ; shift 2
+			       [ "$KEYMAP" = "" ] && { echo "$0 -locale: No keymap specified" ; exit 1; } ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
 			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
 		-arch)     TARGET_ARCH="$2"    ; shift 2
@@ -323,19 +331,31 @@ function build_pkgs() {
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+function set_lang() { #in $MWD
+	if [ "$LOCALE" = "" ] ; then
+		[ "$PROMPT" != "1" ] && return
+		echo -e "-- Language (locale) --"
+		echo -en "Type a valid lang (en_US.UTF-8, ko_KR, jp_JP, etc): " ; read zz
+		LOCALE=$zz
+		[ ! "$LOCALE" ] && echo -e "\n* Using default locale\n" && return
+	fi
+	echo -e "* LANG set to: $LOCALE\n"
+	echo -n "$LOCALE" > ZZ_initrd-expanded/PUPPYLANG
+}
+
 function select_keymap() { #in $MWD
-	[ "$PROMPT" != "1" ] && return
-	echo -e "-- Keyboard layout  --"
-	echo -e "Type one of the following keymaps (leave empty for default keymap): \n"
-	echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
-	echo -en "\nKeymap: " ; read km
-	echo
-	[ -f 0initrd/lib/keymaps/${km}.gz ] && KEYMAP=$km
-	case $KEYMAP in
-		en|us|"") echo "Using default keymap" ; return ;;
-		*) echo "OK, using '${KEYMAP}'" ;;
-	esac
-	sleep 0.5
+	if [ "$KEYMAP" = "" ] ; then
+		[ "$PROMPT" != "1" -a "$ASK_KEYMAP" != "1" ] && return
+		echo -e "-- Keyboard layout  --"
+		echo -e "Type one of the following keymaps (leave empty for default keymap): \n"
+		echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
+		echo -en "\nKeymap: " ; read km
+		echo
+		[ -f 0initrd/lib/keymaps/${km}.gz ] && KEYMAP=$km
+		case $KEYMAP in en|us|"") echo -e "* Using default keymap\n" && return ;; esac
+		sleep 0.5
+	fi
+	echo -e "* Keymap set to: '${KEYMAP}'\n"
 	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
 }
 
@@ -362,6 +382,7 @@ function generate_initrd() {
 	find ZZ_initrd-expanded -type f -name '*MARKER' -delete
 
 	#------------
+	set_lang
 	select_keymap
 	#------------
 
