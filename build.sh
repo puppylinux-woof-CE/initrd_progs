@@ -109,17 +109,16 @@ done
 
 function use_prebuilt_binaries() {
 	[ ! "$PREBUILT_BINARIES" ] && { echo "ERROR"; exit 1 ; }
-	if [ -f "$PREBUILT_BINARIES" ] ; then
-		tar -vxaf "$PREBUILT_BINARIES" || exit 1
-	else
+	zfile=0sources/${PREBUILT_BINARIES##*/}
+	if [ ! -f "$zfile" ] ; then
 		mkdir -p 0sources
-		zfile=0sources/${PREBUILT_BINARIES##*/}
 		if [ ! -f "$zfile" ] ; then
 			wget -P 0sources --no-check-certificate "$PREBUILT_BINARIES"
 			[ $? -eq 0 ] || { rm -f "$zfile" ; exit 1 ; }
 		fi
-		tar -vxaf "$zfile" || exit 1
 	fi
+	echo "* Extracting ${zfile##*/}..."
+	tar -xaf "$zfile" || exit 1
 }
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -168,6 +167,7 @@ function select_target_arch() {
 	[ "$CROSS_COMPILE" != "1" -a "$USE_PREBUILT" != "1" ] && return
 	#-- defaults
 	case $TARGET_ARCH in
+		default) TARGET_ARCH=${ARCH} ;;
 		x86) TARGET_ARCH=${DEFAULT_x86} ;;
 		arm) TARGET_ARCH=${DEFAULT_ARM} ;;
 		#arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
@@ -198,6 +198,7 @@ function select_target_arch() {
 		done
 		echo "	*) default [${ARCH}]"
 		echo -en "\nEnter your choice: " ; read choice
+		echo
 		x=1
 		for a in $ARCH_LIST_EX ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
@@ -219,7 +220,6 @@ function select_target_arch() {
 			esac
 			;;
 	esac
-	echo
 	echo "Arch: $ARCH"
 	sleep 1.5
 }
@@ -275,7 +275,7 @@ function check_bin() {
 		""|'#'*) continue ;;
 		coreutils_static) static_bins='cp' ;;
 		dosfstools_static) static_bins='fsck.fat' ;;
-		e2fsprogs_static) static_bins='fsck e2fsck resize2fs' ;;
+		e2fsprogs_static) static_bins='e2fsck resize2fs' ;;
 		findutils_static) static_bins='find' ;;
 		fuse_static) static_bins='fusermount' ;;
 		module-init-tools_static) static_bins='lsmod modprobe' ;;
@@ -334,7 +334,7 @@ function build_pkgs() {
 function set_lang() { #in $MWD
 	if [ "$LOCALE" = "" ] ; then
 		[ "$PROMPT" != "1" ] && return
-		echo -e "-- Language (locale) --"
+		echo -e "\n -- Language (locale) --"
 		echo -en "Type a valid lang (en_US.UTF-8, ko_KR, jp_JP, etc): " ; read zz
 		LOCALE=$zz
 		[ ! "$LOCALE" ] && echo -e "\n* Using default locale\n" && return
@@ -352,10 +352,10 @@ function select_keymap() { #in $MWD
 		echo -en "\nKeymap: " ; read km
 		echo
 		[ -f 0initrd/lib/keymaps/${km}.gz ] && KEYMAP=$km
-		case $KEYMAP in en|us|"") echo -e "* Using default keymap\n" && return ;; esac
+		case $KEYMAP in en|us|"") echo -e "* Using default keymap" && return ;; esac
 		sleep 0.5
 	fi
-	echo -e "* Keymap set to: '${KEYMAP}'\n"
+	echo -e "* Keymap set to: '${KEYMAP}'"
 	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
 }
 
@@ -371,10 +371,12 @@ function generate_initrd() {
 	INITRD_FILE="initrd.${INITRD_COMP}"
 	[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
 
-	[ "$PROMPT" = "1" ] && echo -en "\nPress enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
-	echo -e "\n============================================"
-	echo "Now creating the initial ramdisk (${INITRD_FILE})"
-	echo -e "=============================================\n"
+	if [ "$USE_PREBUILT" != "1" ] ; then
+		[ "$PROMPT" = "1" ] && echo -en "\nPress enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
+		echo -e "\n============================================"
+		echo "Now creating the initial ramdisk (${INITRD_FILE})"
+		echo -e "=============================================\n"
+	fi
 
 	rm -rf ZZ_initrd-expanded
 	mkdir -p ZZ_initrd-expanded
@@ -393,7 +395,7 @@ function generate_initrd() {
 		case $PROG in ""|'#'*) continue ;; esac
 		if [ -f ../00_${ARCH}/bin/${PROG} ] ; then
 			file ../00_${ARCH}/bin/${PROG} | grep -E 'dynamically|shared' && exit 1
-			cp -av --remove-destination ../00_${ARCH}/bin/${PROG} bin
+			cp -a ${V} --remove-destination ../00_${ARCH}/bin/${PROG} bin
 		else
 			echo "00_${ARCH}/bin/${PROG} not found"
 			exit 1
@@ -409,14 +411,14 @@ function generate_initrd() {
 			[ -f /initrd/DISTRO_SPECS ] && DISTRO_SPECS='/initrd/DISTRO_SPECS'
 		fi
 	fi
-	cp -fv "${DISTRO_SPECS}" .
+	cp -f ${V} "${DISTRO_SPECS}" .
 	. "${DISTRO_SPECS}"
 	
-	cp -fv ../pkg/busybox_static/bb-*-symlinks bin # could contain updates
+	cp -f ${V} ../pkg/busybox_static/bb-*-symlinks bin # could contain updates
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 
-	find . | cpio -o -H newc > ../initrd
+	find . | cpio -o -H newc > ../initrd 2>/dev/null
 	cd ..
 	[ -f initrd.[gx]z ] && rm -f initrd.[gx]z
 	case ${INITRD_COMP} in
@@ -425,13 +427,12 @@ function generate_initrd() {
 	esac
 	[ $? -eq 0 ] || { echo "ERROR" ; exit 1 ; }
 	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
-	echo "@@ -- You can inspect ZZ_initrd-expanded to see the final results -- @@"
 
-	[ "$USE_PREBUILT" = "1" ] && return
-
-	echo -e "\n - INITRD -"
+	echo -e "- INITRD -"
 	echo -e "* ${INITRD_FILE}: for ${DISTRO_NAME} ${DISTRO_VERSION} ${DISTRO_TARGETARCH}"
 
+	[ "$USE_PREBUILT" = "1" ] && return
+	echo -e "\n@@ -- You can inspect ZZ_initrd-expanded to see the final results -- @@"
 	echo -e "\nFinished.\n"
 }
 
@@ -443,6 +444,7 @@ if [ "$USE_PREBUILT" = "1" ] ; then
 	use_prebuilt_binaries
 	select_target_arch
 else
+	V="-v"
 	set_compiler
 	select_target_arch
 	setup_cross_compiler
