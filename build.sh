@@ -1,7 +1,7 @@
 #!/bin/bash
 
-. ./build.conf && export MKFLG
-
+. ./build.conf
+export MKFLG
 export MWD=`pwd`
 
 ARCH_LIST="default i686 x86_64 arm" #arm64
@@ -16,6 +16,26 @@ PREBUILT_BINARIES=""
 
 ARCH=`uname -m`
 OS_ARCH=$ARCH
+
+case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
+	for a in $ARCH_LIST ; do
+		[ "$a" = "default" ] && continue
+		$0 -auto -arch $a
+	done
+	pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
+	echo -e "\n** Creating $pkgx"
+	while read ARCH ; do
+		for PROG in ${INITRD_PROGS} ; do
+			case $PROG in ""|'#'*) continue ;; esac
+			progs2tar+=" ${ARCH}/bin/${PROG}"
+		done
+	done <<< "$(ls -d 00_*)"
+	tar -Jcf $pkgx ${progs2tar}
+	echo "Done."
+	exit
+esac
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 help_msg() {
 	echo "Build static apps in the queue defined in build.conf
@@ -137,6 +157,7 @@ function set_compiler() {
 #--
 
 function select_target_arch() {
+	[ "$CROSS_COMPILE" != "1" -a "$USE_PREBUILT" != "1" ] && return
 	#-- defaults
 	case $TARGET_ARCH in
 		x86) TARGET_ARCH=${DEFAULT_x86} ;;
@@ -144,7 +165,6 @@ function select_target_arch() {
 		#arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
 	esac
 	#--
-	[ "$CROSS_COMPILE" != "1" ] && return
 	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
 		for a in $ARCH_LIST_EX ; do
 			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=1 && break
@@ -387,15 +407,6 @@ function generate_initrd() {
 	echo "@@ -- You can inspect ZZ_initrd-expanded to see the final results -- @@"
 
 	[ "$USE_PREBUILT" = "1" ] && return
-
-	pkgx=initrd_progs-$(date "+%Y%m%d")-${ARCH}.tar.gz
-	for PROG in ${INITRD_PROGS} ; do
-		case $PROG in ""|'#'*) continue ;; esac
-		progs2tar+=" 00_${ARCH}/bin/${PROG}"
-	done
-	rm -f ${pkgx%.*}.*
-	echo -e "\n** Creating $pkgx (static binaries to store somewhere)"
-	tar zcf $pkgx ${progs2tar}
 
 	echo -e "\n - INITRD -"
 	echo -e "* ${INITRD_FILE}: for ${DISTRO_NAME} ${DISTRO_VERSION} ${DISTRO_TARGETARCH}"
