@@ -49,6 +49,7 @@ package() {
 
 # main
 retrieve ${SRC}-${VER}.${COMP}
+[ "$DLD_ONLY" = "1" ] && exit
 extract ${SRC}-${VER}.${COMP}
 build
 package

@@ -1,6 +1,6 @@
 #!/bin/sh
 # functions library
-# this is sourced from <app>_static/<awk>_static.petbuild
+# this is sourced by pkg/<app>_static/<app>_static.petbuild
 
 [ -f ./build.conf ] && build_conf='./build.conf'
 [ -f ../build.conf ] && build_conf='../build.conf'
@@ -53,17 +53,15 @@ function retrieve() {
 		local FILE=${SOURCE##*/}
 	esac
 	if [ -f ${MWD}/0sources/${FILE} ] ; then
-		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${FILE}" && exit
+		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${FILE}"
 		cp -a ${MWD}/0sources/${FILE} .
 	else
 		echo "Downloading ${URL}/${FILE}"
-		wget -c --no-check-certificate ${URL}/${FILE}
+		wget -P ${MWD}/0sources -c --no-check-certificate "${URL}/${FILE}"
 		if [ $? -ne 0 ] ; then
 			rm -f ${FILE}
 			exit_error 1
 		fi
-		mv -f ${FILE} ${MWD}/0sources
-		[ "$DLD_ONLY" -eq 1 ] && exit
 	fi
 }
 

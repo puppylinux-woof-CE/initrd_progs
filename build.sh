@@ -11,17 +11,13 @@ DEFAULT_x86=i686
 DEFAULT_ARM=armv5l
 #DEFAULT_ARM64=aarch64
 
-# can be a local file or a url
 PREBUILT_BINARIES=""
 
 ARCH=`uname -m`
 OS_ARCH=$ARCH
 
 case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
-	for a in $ARCH_LIST ; do
-		[ "$a" = "default" ] && continue
-		$0 -auto -arch $a
-	done
+	for a in ${ARCH_LIST#default } ; do $0 -auto -arch $a ; done
 	pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
 	echo -e "\n** Creating $pkgx"
 	while read ARCH ; do
@@ -54,10 +50,8 @@ Usage:
   -prebuilt   : use prebuilt binaries
   -lang locale: set locale
   -keymap km  : set keyboard layout
-  -ask_keymap : even if -auto is specified
   -auto       : don't prompt for input
-  -gz         : use gz compression for the initrd
-  -xz         : use xz compression for the initrd
+  -gz|-xz     : compression method for the initrd
   -help       : show help and exit
 
   Valid <targets> for -arch:
@@ -80,7 +74,7 @@ while [ "$1" ] ; do
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) export DLD_ONLY=1   ; shift ;;
 		-prebuilt) USE_PREBUILT=1      ; shift ;;
-		-ask_keymap) ASK_KEYMAP=1      ; shift ;;
+		-ask_keymap) ASK_KEYMAP=1      ; shift ;; #for 3builddistro
 		-auto)     PROMPT=0            ; shift ;;
 		-lang)     LOCALE="$2"    ; shift 2
 			       [ "$LOCALE" = "" ] && { echo "$0 -locale: No locale specified" ; exit 1; } ;;
@@ -263,9 +257,8 @@ function setup_cross_compiler() {
 		cp cross-compiler-${ARCH}/cc/lib/* cross-compiler-${ARCH}/lib
 	fi
 	echo -e "\nUsing cross compiler from Aboriginal Linux\n"
-	export OVERRIDE_ARCH=${ARCH}     # = cross compiling
-	export XPATH=${PWD}/${CCOMP_DIR} # = cross compiling
-	# see ./func
+	export OVERRIDE_ARCH=${ARCH}     # = cross compiling # see ./func
+	export XPATH=${PWD}/${CCOMP_DIR} # = cross compiling # see ./func
 }
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -335,15 +328,14 @@ function set_lang() { #in $MWD
 	if [ "$LOCALE" = "" ] ; then
 		[ "$PROMPT" != "1" ] && return
 		echo -e "\n -- Language (locale) --"
-		echo -en "Type a valid lang (en_US.UTF-8, ko_KR, jp_JP, etc): " ; read zz
-		LOCALE=$zz
+		echo -en "Type a valid lang (ko_KR, ja_JP, etc): " ; read LOCALE
 		[ ! "$LOCALE" ] && echo -e "\n* Using default locale\n" && return
 	fi
 	echo -e "* LANG set to: $LOCALE\n"
 	echo -n "$LOCALE" > ZZ_initrd-expanded/PUPPYLANG
 }
 
-function select_keymap() { #in $MWD
+function set_keymap() { #in $MWD
 	if [ "$KEYMAP" = "" ] ; then
 		[ "$PROMPT" != "1" -a "$ASK_KEYMAP" != "1" ] && return
 		echo -e "-- Keyboard layout  --"
@@ -383,10 +375,8 @@ function generate_initrd() {
 	cp -rf 0initrd/* ZZ_initrd-expanded
 	find ZZ_initrd-expanded -type f -name '*MARKER' -delete
 
-	#------------
-	set_lang
-	select_keymap
-	#------------
+	set_lang    #
+	set_keymap  #
 
 	cd ZZ_initrd-expanded
 	[ -f dev.tar.gz ] && tar -zxf dev.tar.gz && rm -f dev.tar.gz
