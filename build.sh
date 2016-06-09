@@ -11,7 +11,7 @@ DEFAULT_x86=i686
 DEFAULT_ARM=armv5l
 #DEFAULT_ARM64=aarch64
 
-PREBUILT_BINARIES=""
+PREBUILT_BINARIES="http://01micko.com/initrd_tarballs/initrd_progs-20160610-static.tar.xz"
 
 ARCH=`uname -m`
 OS_ARCH=$ARCH
@@ -204,6 +204,7 @@ function select_target_arch() {
 		esac
 	fi
 	#--
+	[ "$USE_PREBUILT" = "1" ] && echo "Arch: $ARCH" && return
 	case $OS_ARCH in
 		*64) ok=1 ;;
 		*)
