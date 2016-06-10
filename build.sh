@@ -39,7 +39,7 @@ help_msg() {
 Usage:
   $0 [options]
 
-  Options:
+Options:
   -pkg pkg    : compile specific pkg only
   -all        : force building all *_static pkgs
   -arch target: compile for target arch
@@ -64,27 +64,41 @@ Usage:
 "
 }
 
-PROMPT=1
+## defaults ##
+PROMPT=yes
+USE_SYS_GCC=no
+CROSS_COMPILE=no
+FORCE_BUILD_ALL=no
+export DLD_ONLY=no
+USE_PREBUILT=no
+ASK_KEYMAP=no
+INITRD_CREATE=yes
+case ${INITRD_COMP} in
+	gz|xz) ok=yes ;;
+	*) INITRD_COMP="gz" ;;
+esac
 
+## command line ##
 while [ "$1" ] ; do
 	case $1 in
-		-sysgcc)   USE_SYS_GCC=1       ; shift ;;
-		-cross)    CROSS_COMPILE=1     ; shift ;;
-		-all)      FORCE_BUILD_ALL=1   ; shift ;;
+		-sysgcc)   USE_SYS_GCC=yes     ; shift ;;
+		-cross)    CROSS_COMPILE=yes   ; shift ;;
+		-all)      FORCE_BUILD_ALL=yes ; shift ;;
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
-		-download) export DLD_ONLY=1   ; shift ;;
-		-prebuilt) USE_PREBUILT=1      ; shift ;;
-		-ask_keymap) ASK_KEYMAP=1      ; shift ;; #for 3builddistro
-		-auto)     PROMPT=0            ; shift ;;
-		-lang)     LOCALE="$2"    ; shift 2
+		-download) DLD_ONLY=yes        ; shift ;;
+		-prebuilt) USE_PREBUILT=yes    ; shift ;;
+		-ask_keymap) ASK_KEYMAP=yes    ; shift ;; #for 3builddistro
+		-nord)     INITRD_CREATE=no    ; shift ;;
+		-auto)     PROMPT=no           ; shift ;;
+		-lang)     LOCALE="$2"         ; shift 2
 			       [ "$LOCALE" = "" ] && { echo "$0 -locale: No locale specified" ; exit 1; } ;;
-		-keymap)   KEYMAP="$2"    ; shift 2
+		-keymap)   KEYMAP="$2"         ; shift 2
 			       [ "$KEYMAP" = "" ] && { echo "$0 -locale: No keymap specified" ; exit 1; } ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
 			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
 		-arch)     TARGET_ARCH="$2"    ; shift 2
 			       [ "$TARGET_ARCH" = "" ] && { echo "$0 -arch: Specify a target arch" ; exit 1; } ;;
-		-specs)    DISTRO_SPECS="$2"    ; shift 2
+		-specs)    DISTRO_SPECS="$2"   ; shift 2
 			       [ ! -f "$DISTRO_SPECS" ] && { echo "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ; exit 1; } ;;
 	-h|-help|--help) help_msg ; exit ;;
 		-clean)
@@ -122,31 +136,31 @@ function set_compiler() {
 		echo "It looks like development tools are not installed.. stopping"
 		exit 1
 	fi
-	if [ "$USE_SYS_GCC" != "1" -a "$CROSS_COMPILE" != "1" ] ; then
+	if [ "$USE_SYS_GCC" = "no" -a "$CROSS_COMPILE" = "no" ] ; then
 		# the cross compilers from landley.net were compiled on x86
 		# if we're using the script in a non-x86 system
 		# it means that the system gcc must be chosen by default
 		# perhaps we're running qemu or a native linux os
 		case $ARCH in
-			i?86|x86_64) CROSS_COMPILE=1 ;;
-			*) USE_SYS_GCC=1 ;;
+			i?86|x86_64) CROSS_COMPILE=yes ;;
+			*) USE_SYS_GCC=yes ;;
 		esac
 	fi
-	if [ "$USE_SYS_GCC" = "1" ] ; then
+	if [ "$USE_SYS_GCC" = "yes" ] ; then
 		which gcc &>/dev/null || { echo "No gcc, aborting..." ; exit 1 ; }
 		echo -e "\nBuilding in: $ARCH"
 		echo -e "\n* Using system gcc\n"
 		sleep 1.5
 	else
 		#   aboriginal linux   #
-		CROSS_COMPILE=1 #precaution
+		CROSS_COMPILE=yes #precaution
 		case $ARCH in
-			i?86|x86_64) ok=1 ;;
+			i?86|x86_64) ok=yes ;;
 			*)
 				echo -e "*** The cross-compilers from aboriginal linux"
 				echo -e "*** work in x86 systems only, I guess."
 				echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
-				if [ "$PROMPT" = "1" ] ; then
+				if [ "$PROMPT" = "yes" ] ; then
 					echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
 				else
 					exit 1
@@ -158,7 +172,7 @@ function set_compiler() {
 #--
 
 function select_target_arch() {
-	[ "$CROSS_COMPILE" != "1" -a "$USE_PREBUILT" != "1" ] && return
+	[ "$CROSS_COMPILE" = "no" -a "$USE_PREBUILT" = "no" ] && return
 	#-- defaults
 	case $TARGET_ARCH in
 		default) TARGET_ARCH=${ARCH} ;;
@@ -167,11 +181,12 @@ function select_target_arch() {
 		#arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
 	esac
 	#--
+	VALID_TARGET_ARCH=no
 	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
 		for a in $ARCH_LIST_EX ; do
-			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=1 && break
+			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=yes && break
 		done
-		if [ "$VALID_TARGET_ARCH" != "1" ] ; then
+		if [ "$VALID_TARGET_ARCH" = "no" ] ; then
 			echo "Invalid target arch: $TARGET_ARCH"
 			exit 1
 		else
@@ -179,10 +194,10 @@ function select_target_arch() {
 		fi
 	fi
 	#--
-	if [ "$VALID_TARGET_ARCH" != "1" -a "$PROMPT" = "1" ] ; then
+	if [ "$VALID_TARGET_ARCH" = "no" -a "$PROMPT" = "yes" ] ; then
 		echo -e "\nWe're going to compile apps for the init ram disk"
 		echo -e "Select the arch you want to compile to\n"
-		x=1
+		x=yes
 		for a in $ARCH_LIST ; do
 			case $a in
 				default) echo "	${x}) default [${ARCH}]" ;;
@@ -193,20 +208,20 @@ function select_target_arch() {
 		echo "	*) default [${ARCH}]"
 		echo -en "\nEnter your choice: " ; read choice
 		echo
-		x=1
+		x=yes
 		for a in $ARCH_LIST_EX ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
 		done
 		case $selected_arch in
-			default|"")ok=1 ;;
+			default|"")ok=yes ;;
 			*) ARCH=$selected_arch ;;
 		esac
 	fi
 	#--
-	[ "$USE_PREBUILT" = "1" ] && echo "Arch: $ARCH" && return
+	[ "$USE_PREBUILT" = "yes" ] && echo "Arch: $ARCH" && return
 	case $OS_ARCH in
-		*64) ok=1 ;;
+		*64) ok=yes ;;
 		*)
 			case $ARCH in *64)
 				echo -e "\n*** Trying to compile for a 64bit arch in a 32bit system?"
@@ -223,7 +238,7 @@ function select_target_arch() {
 
 function setup_cross_compiler() {
 	# Aboriginal Linux #
-	[ "$CROSS_COMPILE" != "1" ] && return
+	[ "$CROSS_COMPILE" = "no" ] && return
 	CCOMP_DIR=cross-compiler-${ARCH}
 	URL=http://landley.net/aboriginal/downloads/binaries
 	PACKAGE=${CCOMP_DIR}.tar.gz
@@ -231,7 +246,7 @@ function setup_cross_compiler() {
 	## download
 	if [ ! -f "0sources/${PACKAGE}" ];then
 		echo "Download cross compiler from Aboriginal Linux"
-		[ "$PROMPT" = "1" ] && echo -n "Press enter to continue, CTRL-C to cancel..." && read zzz
+		[ "$PROMPT" = "yes" ] && echo -n "Press enter to continue, CTRL-C to cancel..." && read zzz
 		wget -c -P 0sources ${URL}/${PACKAGE}
 		if [ $? -ne 0 ] ; then
 			rm -rf ${CCOMP_DIR}
@@ -239,9 +254,9 @@ function setup_cross_compiler() {
 			exit 1
 		fi
 	else
-		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${PACKAGE}"
+		[ "$DLD_ONLY" = "yes" ] && echo "Already downloaded ${PACKAGE}"
 	fi
-	[ "$DLD_ONLY" = "1" ] && return
+	[ "$DLD_ONLY" = "yes" ] && return
 	## extract
 	if [ ! -d "$CCOMP_DIR" ] ; then
 		tar --directory=$PWD -xaf 0sources/${PACKAGE}
@@ -281,19 +296,17 @@ function check_bin() {
 	done
 }
 
-#--
-
 function build_pkgs() {
 	rm -f .fatal
 	mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
-	if [ "$DLD_ONLY" != "1" ] ; then
+	if [ "$DLD_ONLY" = "no" ] ; then
 		echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 		echo -e "\nbuilding packages for the initial ram disk\n"
 		sleep 1
 	fi
 	#--
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
-	if [ "$FORCE_BUILD_ALL" = "1" ] ; then
+	if [ "$FORCE_BUILD_ALL" = "yes" ] ; then
 		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
 	fi
 	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
@@ -301,7 +314,7 @@ function build_pkgs() {
 	for init_pkg in ${PACKAGES} ; do
 		[ -f .fatal ] && { echo "Exiting.." ; rm -f .fatal ; exit 1 ; }
 		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
-		if [ "$DLD_ONLY" != "1" ] ; then
+		if [ "$DLD_ONLY" = "no" ] ; then
 			check_bin $init_pkg
 			[ $? -eq 0 ] && { echo "$init_pkg exists ... skipping" ; continue ; }
 			echo -e "\n+=============================================================================+"
@@ -313,12 +326,9 @@ function build_pkgs() {
 		mkdir -p ${MWD}/00_${ARCH}/log
 		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
 		cd ${MWD}
-		[ "$DLD_ONLY" != "1" ] && continue
+		[ "$DLD_ONLY" = "no" ] && continue
 		check_bin $init_pkg
-		if [ $? -ne 0 ] ; then ##not found
-			echo "target binary does not exist..."
-			[ "$HALT_ERRS" = "1" ] && exit 1
-		fi
+		[ $? -ne 0 ] && { echo "target binary does not exist..."; exit 1; }
 	done
 	rm -f .fatal
 }
@@ -327,7 +337,7 @@ function build_pkgs() {
 
 function set_lang() { #in $MWD
 	if [ "$LOCALE" = "" ] ; then
-		[ "$PROMPT" != "1" ] && return
+		[ "$PROMPT" = "no" ] && return
 		echo -e "\n -- Language (locale) --"
 		echo -en "Type a valid lang (ko_KR, ja_JP, etc): " ; read LOCALE
 		[ ! "$LOCALE" ] && echo -e "\n* Using default locale\n" && return
@@ -338,12 +348,11 @@ function set_lang() { #in $MWD
 
 function set_keymap() { #in $MWD
 	if [ "$KEYMAP" = "" ] ; then
-		[ "$PROMPT" != "1" -a "$ASK_KEYMAP" != "1" ] && return
+		[ "$PROMPT" = "no" -a "$ASK_KEYMAP" = "no" ] && return
 		echo -e "-- Keyboard layout  --"
 		echo -e "Type one of the following keymaps (leave empty for default keymap): \n"
 		echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
 		echo -en "\nKeymap: " ; read km
-		echo
 		[ -f 0initrd/lib/keymaps/${km}.gz ] && KEYMAP=$km
 		case $KEYMAP in en|us|"") echo -e "* Using default keymap" && return ;; esac
 		sleep 0.5
@@ -352,20 +361,14 @@ function set_keymap() { #in $MWD
 	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
 }
 
-#--
-
 function generate_initrd() {
-	[ "$DLD_ONLY" = "1" ] && exit
-	[ "$INITRD_CREATE" != "1" ] && echo -e "\n* Not creating initial ram disk" && exit 1
-	case ${INITRD_COMP} in
-		gz|xz) ok=1 ;;
-		*) INITRD_COMP="gz" ;; #precaution
-	esac
+	[ "$DLD_ONLY" = "yes" ] && exit
+	[ "$INITRD_CREATE" = "no" ] && echo -e "\n* Not creating initial ram disk" && exit 1
 	INITRD_FILE="initrd.${INITRD_COMP}"
-	[ "$INITRD_GZ" = "1" ] && INITRD_FILE="initrd.gz"
+	[ "$INITRD_GZ" = "yes" ] && INITRD_FILE="initrd.gz"
 
-	if [ "$USE_PREBUILT" != "1" ] ; then
-		[ "$PROMPT" = "1" ] && echo -en "\nPress enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
+	if [ "$USE_PREBUILT" = "no" ] ; then
+		[ "$PROMPT" = "yes" ] && echo -en "\nPress enter to create ${INITRD_FILE}, CTRL-C to end here.." && read zzz
 		echo -e "\n============================================"
 		echo "Now creating the initial ramdisk (${INITRD_FILE})"
 		echo -e "=============================================\n"
@@ -405,7 +408,7 @@ function generate_initrd() {
 	cp -f ${V} "${DISTRO_SPECS}" .
 	. "${DISTRO_SPECS}"
 	
-	cp -f ${V} ../pkg/busybox_static/bb-*-symlinks bin # could contain updates
+	cp -f ${V} ../pkg/busybox_static/bb-*-symlinks bin # essential
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
 
@@ -417,21 +420,21 @@ function generate_initrd() {
 		xz) xz --check=crc32 --lzma2 initrd ;;
 	esac
 	[ $? -eq 0 ] || { echo "ERROR" ; exit 1 ; }
-	[ "$INITRD_GZ" = "1" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
+	[ "$INITRD_GZ" = "yes" -a -f initrd.xz ] && mv -f initrd.xz initrd.gz
 
-	echo -e "- INITRD -"
-	echo -e "* ${INITRD_FILE}: for ${DISTRO_NAME} ${DISTRO_VERSION} ${DISTRO_TARGETARCH}"
+	echo -e "\n***        INITRD: ${INITRD_FILE} [${ARCH}]"
+	echo -e "*** /DISTRO_SPECS: ${DISTRO_NAME} ${DISTRO_VERSION} ${DISTRO_TARGETARCH}"
 
-	[ "$USE_PREBUILT" = "1" ] && return
+	[ "$USE_PREBUILT" = "yes" ] && return
 	echo -e "\n@@ -- You can inspect ZZ_initrd-expanded to see the final results -- @@"
-	echo -e "\nFinished.\n"
+	echo -e "Finished.\n"
 }
 
 ###############################################
 #                 MAIN
 ###############################################
 
-if [ "$USE_PREBUILT" = "1" ] ; then
+if [ "$USE_PREBUILT" = "yes" ] ; then
 	use_prebuilt_binaries
 	select_target_arch
 else

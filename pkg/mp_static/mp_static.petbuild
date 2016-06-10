@@ -29,7 +29,7 @@ build_ncurses() {
 --without-debug
 --without-develop"
 	_configure
-	_make ${MKFLG} LDFLAGS=-static CFLAGS="$(_cflags)"
+	_make ${MKFLG} LDFLAGS=-static CFLAGS=\"$(_cflags)\"
 	mkdir -p ${ncurses_dir}
 	_make prefix=${ncurses_dir} install
 	cd ..
@@ -68,7 +68,7 @@ package() {
 # main
 retrieve https://ftp.gnu.org/pub/gnu/ncurses/ncurses-${ncurses_ver}.tar.gz
 retrieve ${SRC}-${VER}.${COMP}
-[ "$DLD_ONLY" = "1" ] && exit
+[ "$DLD_ONLY" = "yes" ] && exit
 extract ${SRC}-${VER}.${COMP}
 build
 package

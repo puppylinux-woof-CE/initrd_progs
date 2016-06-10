@@ -37,7 +37,7 @@ package() {
 
 # main
 retrieve ${SRC}-${VER}.${COMP} || exit_error 1
-[ "$DLD_ONLY" = "1" ] && exit
+[ "$DLD_ONLY" = "yes" ] && exit
 extract ${SRC}-${VER}.${COMP} || exit_error 1
 build
 package	

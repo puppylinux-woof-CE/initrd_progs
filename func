@@ -8,18 +8,11 @@
 [ -f ../../../build.conf ] && build_conf='../../../build.conf'
 [ -f ../../../../build.conf ] && build_conf='../../../../build.conf'
 
-if [ -f "$build_conf" ] ; then
-	. ${build_conf}
-else
-	exit 1
-fi
+[ ! -f "$build_conf" ] && exit 1
+. ${build_conf}
 
-if [ -d "$MWD" ] ; then
-	if [ "$DLD_ONLY" != "1" ] ; then
-		echo
-		echo "main dir is $MWD" #MWD is set in build.sh
-		echo
-	fi
+if [ -d "$MWD" -a "$DLD_ONLY" = "no" ] ; then
+	echo -e "\n* main dir is $MWD\n" #MWD is set in build.sh
 fi
 
 function set_arch() {
@@ -39,9 +32,7 @@ fi
 #---------------------------------------------------------
 
 function exit_error() {
-	if [ "$HALT_ERRS" = "1" ] ; then #build.conf
-		echo -n > $MWD/.fatal
-	fi
+	echo -n > $MWD/.fatal
 	exit $@
 }
 
@@ -53,8 +44,7 @@ function retrieve() {
 		local FILE=${SOURCE##*/}
 	esac
 	if [ -f ${MWD}/0sources/${FILE} ] ; then
-		[ "$DLD_ONLY" = "1" ] && echo "Already downloaded ${FILE}"
-		cp -a ${MWD}/0sources/${FILE} .
+		[ "$DLD_ONLY" = "yes" ] && echo "Already downloaded ${FILE}"
 	else
 		echo "Downloading ${URL}/${FILE}"
 		wget -P ${MWD}/0sources -c --no-check-certificate "${URL}/${FILE}"
@@ -67,19 +57,8 @@ function retrieve() {
 
 function extract() {
 	tfile="$@"
-	if [ -f "$tfile" ] ; then
-		tar -axf ${tfile}
-	elif [ -f "${MWD}/0sources/$tfile" ] ; then
-		tar -axf ${MWD}/0sources/${tfile}
-	else
-		echo "No such file: $tfile"
-		exit_error 1
-	fi
-	if [ $? -ne 0 ] ; then
-		[ -f "$tfile" ] && rm -f ${tfile}
-		exit_error 1
-	fi
-	[ -f "$tfile" ] && mv -f ${tfile} ${MWD}/0sources
+	[ -f "${MWD}/0sources/$tfile" ] || { echo "No such file: $tfile"; exit_error 1; }
+	tar -axf ${MWD}/0sources/${tfile} || { rm -f ${tfile}; exit_error 1; }
 }
 
 function abort_if_file_not_found() {
@@ -108,9 +87,9 @@ function _cflags() {
 
 function make_sh() {
 	#script can not overwrite itself
-	if [ "$MAKE_SCRIPT" != "1" ] ; then
+	if [ "$MAKE_SCRIPT" != "yes" ] ; then
 		echo "#!/bin/sh" > make.sh
-		echo "export MAKE_SCRIPT=1" >> make.sh
+		echo "export MAKE_SCRIPT=yes" >> make.sh
 		[ -d "$XPATH" ] && echo "export XPATH=$XPATH" >> make.sh
 		echo ". $MWD/func" >> make.sh
 		echo "_make $@" >> make.sh
@@ -161,12 +140,12 @@ function _make() {
 			mkstr "LDFLAGS=-static CFLAGS=-static"
 			hl_echo "make $mkstr"
 			make_sh "make $mkstr"
-			make $mkstr
+			eval make $mkstr
 		fi
 	else
 		hl_echo "make $@"
 		make_sh "make $@"
-		make $@
+		eval make $@
 	fi
 	return $?
 }
@@ -174,9 +153,8 @@ function _make() {
 #this is inside the source dir
 function _install() {
 	local file="$1" dest="$2"
-	#[ -f "$file" ] || exit_error 1
 	if [ -d "$XPATH" ] ; then
-		${ARCH}-strip --strip-all "$file" #--strip-unneeded
+		${ARCH}-strip --strip-all "$file"
 	else
 		strip --strip-all "$file"
 	fi
@@ -186,7 +164,6 @@ function _install() {
 		echo "$file is not static..!"
 		exit_error 1
 	}
-
 }
 
 ### END ###
