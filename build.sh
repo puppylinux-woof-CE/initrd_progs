@@ -197,7 +197,7 @@ function select_target_arch() {
 	if [ "$VALID_TARGET_ARCH" = "no" -a "$PROMPT" = "yes" ] ; then
 		echo -e "\nWe're going to compile apps for the init ram disk"
 		echo -e "Select the arch you want to compile to\n"
-		x=yes
+		x=1
 		for a in $ARCH_LIST ; do
 			case $a in
 				default) echo "	${x}) default [${ARCH}]" ;;
@@ -208,7 +208,7 @@ function select_target_arch() {
 		echo "	*) default [${ARCH}]"
 		echo -en "\nEnter your choice: " ; read choice
 		echo
-		x=yes
+		x=1
 		for a in $ARCH_LIST_EX ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
