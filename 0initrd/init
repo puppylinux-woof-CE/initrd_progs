@@ -493,8 +493,14 @@ fi
 
 #load PUPSAVE
 if [ "$PUPSAVE" ];then
+ if [ "${PMEDIA:3}" = "flash" ];then
+  PUPMODE=13
+  SAVE_LAYER="/pup_ro1"
+ else
+  PUPMODE=12
+  SAVE_LAYER="/pup_rw"
+ fi
  SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
- SAVE_LAYER="/pup_rw"
  if [ -d "$SAVE_FN" ];then #savefolder
   rm -r -f $SAVE_LAYER
   ln -s $SAVE_FN $SAVE_LAYER
@@ -510,10 +516,21 @@ if [ "$PUPSAVE" ];then
  fi
 fi
 if [ "$PUPSAVE" ];then
- [ -d ${SAVE_LAYER}/initrd/tmp ] && { rm -r -f ${SAVE_LAYER}/initrd/tmp; mkdir -p ${SAVE_LAYER}/initrd/tmp; }
- [ -d ${SAVE_LAYER}/tmp ] && { rm -r -f ${SAVE_LAYER}/tmp; mkdir -p ${SAVE_LAYER}/tmp; }
- PUPMODE=12
- mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
+ [ -d ${SAVE_LAYER}/initrd/tmp ] && rm -r -f ${SAVE_LAYER}/initrd/tmp
+ mkdir -p ${SAVE_LAYER}/initrd/tmp
+ [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
+ [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
+ if [ $PUPMODE -eq 13 ];then
+  [ -d /mnt/tmpfs/pup_rw/tmp ] && rm -r -f /mnt/tmpfs/pup_rw/tmp
+  mkdir -p /mnt/tmpfs/pup_rw/tmp
+  mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
+ else
+  [ -d /mnt/tmpfs/tmp ] && rm -r -f /mnt/tmpfs/tmp
+  mkdir -p /mnt/tmpfs/tmp
+  ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp #/tmp after switch_root
+  mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
+  rm -r -f /mnt/tmpfs/pup_rw
+ fi
  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
 else
  SAVE_MP=""
