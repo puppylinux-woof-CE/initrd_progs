@@ -825,7 +825,7 @@ export TZ='XXX-23' #100318 imaginary place right around the world east of Greenw
 #will not result in a future date after the correct time is set in the main puppy f.s.
 #ref: http://www.gnu.org/s/libc/manual/html_node/TZ-Variable.html
 #100427 crap, despite the help inside the hwclock applet, it doesn't accept long-options...
-/bin/hwclock -s -l #set system time (based on hw clock set to local time).
+/bin/hwclock -l -s #set system time (based on hw clock set to local time).
 
 #does this initrd have all the zdrv components inside it?...
 ZDRVINIT='no'
