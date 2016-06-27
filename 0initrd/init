@@ -343,6 +343,7 @@ VFAT_OUT_PARAM='shortname=mixed,quiet,utf8'
 
 get_part_info
 grep -v '^sr' /tmp/ALLDRVS0 > /tmp/ATADRIVES0
+ATAOPTICALDRIVES="$(grep '^sr' /tmp/ALLDRVS0 | tr '\n' ' ')"
 
 KEEPMOUNTED=""
 BLKIDOUT=""
