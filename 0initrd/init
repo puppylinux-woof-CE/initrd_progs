@@ -496,82 +496,82 @@ if [ "$SAVE_MP" ];then #have mounted save? partition
  fi
 fi
 
-if [ "$PUPSAVE" ];then
- #refine pupmode
+SAVE_LAYER=""
+if [ "$PUPSAVE" ];then #refine pupmode
  if [ $PUPMODE -eq 6 -o $PUPMODE -eq 12 ];then
-  [ "${PMEDIA:3}" = "flash" ] && PUPMODE=$(expr $PUPMODE + 1)
+  if [ "${PMEDIA:3}" = "flash" ];then
+   PUPMODE=$(expr $PUPMODE + 1)
+   SAVE_LAYER="/pup_ro1"
+  else
+   SAVE_LAYER="/pup_rw"
+  fi
  fi
- #load PUPSAVE
- case $PUPMODE in
-  77) #load folders
-   PUPMODE=77 #place holder
-  ;;
-  13) #prepend ro1
-   SAVE_LAYER="/pup_ro1"
-   SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
-   if [ -d "$SAVE_FN" ];then #savefolder
-    rm -r -f $SAVE_LAYER
-    ln -s $SAVE_FN $SAVE_LAYER
-   elif [ -s "$SAVE_FN" ];then #savefile
-    ONE_LOOP="$(losetup -f)"
-    losetup $ONE_LOOP $SAVE_FN
-    SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
-    [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
-    mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
-    [ $? -eq 0 ] || PUPSAVE=""  
-   else
-    PUPSAVE=""
-   fi
-   #adsjust stack
-   if [ "$PUPSAVE" ];then
-    [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
-    [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
-    [ -d /mnt/tmpfs/pup_rw/tmp ] && rm -r -f /mnt/tmpfs/pup_rw/tmp
-    mkdir -p /mnt/tmpfs/pup_rw/tmp
-    mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
-    KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-   fi
-  ;;
-  12) #replace rw
-   SAVE_LAYER="/pup_rw"
-   SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
-   if [ -d "$SAVE_FN" ];then #savefolder
-    rm -r -f $SAVE_LAYER
-    ln -s $SAVE_FN $SAVE_LAYER
-   elif [ -s "$SAVE_FN" ];then #savefile
-    ONE_LOOP="$(losetup -f)"
-    losetup $ONE_LOOP $SAVE_FN
-    SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
-    [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
-    mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
-    [ $? -eq 0 ] || PUPSAVE=""  
-   else
-    PUPSAVE=""
-   fi
-   #adsjust stack
-   if [ "$PUPSAVE" ];then
-    [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
-    [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
-    [ -d /mnt/tmpfs/tmp ] && rm -r -f /mnt/tmpfs/tmp
-    mkdir -p /mnt/tmpfs/tmp
-    ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp #/tmp after switch_root
-    mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
-    rm -r -f /mnt/tmpfs/pup_rw
-    KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-   fi
-  ;;
-  7) #prepend ro1
-   SAVE_LAYER="/pup_ro1"
-   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-  ;;
-  6) #replace rw
-   SAVE_LAYER="/pup_rw"
-   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-  ;;
- esac
-else
- SAVE_MP=""
 fi
+
+#setup stack
+case $PUPMODE in
+ 77) #load folders
+  PUPMODE=77 #place holder
+ ;;
+ 13) #prepend ro1
+  SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
+  if [ -d "$SAVE_FN" ];then #savefolder
+   rm -r -f $SAVE_LAYER
+   ln -s $SAVE_FN $SAVE_LAYER
+  elif [ -s "$SAVE_FN" ];then #savefile
+   ONE_LOOP="$(losetup -f)"
+   losetup $ONE_LOOP $SAVE_FN
+   SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
+   [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+   mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
+   [ $? -eq 0 ] || PUPSAVE=""  
+  else
+   PUPSAVE=""
+  fi
+  if [ "$PUPSAVE" ];then
+   rm -r -f ${SAVE_LAYER}/tmp #in case last boot was pupmode=12
+   #adjust stack
+   mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
+   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  fi
+ ;;
+ 12) #replace rw
+  SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
+  if [ -d "$SAVE_FN" ];then #savefolder
+   rm -r -f $SAVE_LAYER
+   ln -s $SAVE_FN $SAVE_LAYER
+  elif [ -s "$SAVE_FN" ];then #savefile
+   ONE_LOOP="$(losetup -f)"
+   losetup $ONE_LOOP $SAVE_FN
+   SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
+   [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+   mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
+   [ $? -eq 0 ] || PUPSAVE=""  
+  else
+   PUPSAVE=""
+  fi
+  if [ "$PUPSAVE" ];then
+   #setup empty /tmp on tmpfs for after switch
+   rm -r -f ${SAVE_LAYER}/tmp
+   mkdir -p /mnt/tmpfs/tmp
+   ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp
+   #adjust stack
+   mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
+   rm -r -f /mnt/tmpfs/pup_rw
+   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  fi
+ ;;
+ 7) #prepend ro1
+  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+ ;;
+ 6) #replace rw
+  rm -r -f /mnt/tmpfs/pup_rw
+  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+ ;;
+ 5)
+  SAVE_MP=""
+ ;;
+esac
 
 umount_unneeded
 
@@ -622,11 +622,16 @@ for ONEMNT in `mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' '`;do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
+
 if [ "$PUPSAVE" -a -d "/pup_new/initrd${SAVE_FN}" ];then
  if [ "$SAVE_LAYER" -a -L "$SAVE_LAYER" ];then
   rm -r -f "/pup_new/initrd${SAVE_LAYER}"
-  ln -s "/initrd${SAVE_FN}" "/pup_new/initrd${SAVE_LAYER}"
+  ln -s "/initrd${SAVE_FN}" "/pup_new/initrd${SAVE_LAYER}" #for after switch
  fi
+fi
+if [ -d "/pup_new/initrd/mnt/tmpfs/pup_rw" ];then
+  rm -r -f /pup_new/initrd/pup_rw
+  ln -s /initrd/mnt/tmpfs/pup_rw /pup_new/initrd/pup_rw #for after switch
 fi
 
 #PNOX is a boot param. /etc/profile prevents X from starting if this file exists...
