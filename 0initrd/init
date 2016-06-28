@@ -70,7 +70,6 @@ decode_spec() {
  ONE_BP_FN="$(echo "$1" | cut -f 2 -d ':')"
  [ "$ONE_BP_FN" = "$ONE_BP_ID" ] && ONE_BP_FN=""
  [ "$ONE_BP_FN" ] && [ "${ONE_BP_FN:0:1}" != "/" ] && ONE_BP_FN="$PSUBDIR/$ONE_BP_FN"
-# [ "$ONE_BP_ID" ] || ONE_BP_ID="$P_BP_ID"
 }
 
 decode_id() {
@@ -114,7 +113,6 @@ find_onepupdrv() {
  else
   ONE_PART="$P_PART"
  fi
-#echo "ONE_PART=$ONE_PART BF_FN=${2} DEF_FN=${3}" > /dev/console
  [ "$ONE_PART" ] || return
  if [ "${2}" ];then
   ONE_TRY_FN="${2}"
@@ -175,13 +173,7 @@ load_onepupdrv() {
   SIZESFSK=$(($SIZESFSK + 1000)) #some slack.
   MINRAM2CPY=$(($SIZESFSK * 2)) #100222 technosaurus: in case of very big puppies.
   #decide whether to copy .sfs's to ram
-  if [ "$PNOCOPY" != "yes" ];then
-   [ "$(echo -n "$ONE_PART" | grep -o -f /tmp/ATADRIVES0)" = "" ] && COPYCONTENDER='yes' #test if not fast internal drive.
-   [ $PUPMODE -eq 5 ] && COPYCONTENDER='yes'
-   [ "$DEV1FS" = "iso9660" ] && COPYCONTENDER='yes'
-   [ "$DEV1FS" = "udf" ] && COPYCONTENDER='yes' #130128
-   [ $RAMSIZE -gt 700000 ] && COPYCONTENDER='yes' #130728 always try to copy sfs to ram if >=700MB.
-  fi
+  [ "$PNOCOPY" = "yes" ] || COPYCONTENDER='yes'
   [ "$PCOPY" = "yes" ] && COPYCONTENDER='yes'
   [ "$COPYCONTENDER" = "yes" ] && [ $RAMSIZE -gt 400000 ] && [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
  fi
@@ -241,7 +233,6 @@ search_func() {
  fi
  [ "$TRY_PARTS" ] || return
  for ONETRY in $TRY_PARTS;do
-#echo "ONETRY=$ONETRY" > /dev/console
   find_onepupdrv "$(echo -n "$ONETRY" | cut -f 1 -d '|')" "$P_BP_FN" "$P_DEF_FN" "p"
   if [ "$ONE_FN" ];then
    PDRV="$ONE_PART,$ONE_FS,$ONE_FN"
@@ -335,11 +326,12 @@ VFAT_OUT_PARAM='shortname=mixed,quiet,utf8'
 [ "$PSAVE" ] && { decode_spec "$PSAVE"; SAVE_BP_ID="$ONE_BP_ID"; SAVE_BP_FN="$ONE_BP_FN"; }
 
 #first look inside initrd...
-[ -f /${P_DEF_FN} ] && PDRV="rootfs,rootfs,/$P_DEF_FN"
-[ -f /${Z_DEF_FN} ] && ZDRV="rootfs,rootfs,/$Z_DEF_FN"
-[ -f /${F_DEF_FN} ] && FDRV="rootfs,rootfs,/$F_DEF_FN"
-[ -f /${A_DEF_FN} ] && ADRV="rootfs,rootfs,/$A_DEF_FN"
-[ -f /${Y_DEF_FN} ] && YDRV="rootfs,rootfs,/$Y_DEF_FN"
+#unset x_DEF_FN so that find_onepupdrv() won't look for it
+[ -f /${P_DEF_FN} ] && { PDRV="rootfs,rootfs,/$P_DEF_FN"; P_DEF_FN=""; }
+[ -f /${Z_DEF_FN} ] && { ZDRV="rootfs,rootfs,/$Z_DEF_FN"; Z_DEF_FN=""; }
+[ -f /${F_DEF_FN} ] && { FDRV="rootfs,rootfs,/$F_DEF_FN"; F_DEF_FN=""; }
+[ -f /${A_DEF_FN} ] && { ADRV="rootfs,rootfs,/$A_DEF_FN"; A_DEF_FN=""; }
+[ -f /${Y_DEF_FN} ] && { YDRV="rootfs,rootfs,/$Y_DEF_FN"; Y_DEF_FN=""; }
 
 get_part_info
 grep -v '^sr' /tmp/ALLDRVS0 > /tmp/ATADRIVES0
@@ -347,6 +339,7 @@ ATAOPTICALDRIVES="$(grep '^sr' /tmp/ALLDRVS0 | tr '\n' ' ')"
 
 KEEPMOUNTED=""
 BLKIDOUT=""
+
 decode_all_ids
 if [ "${PMEDIA:0:3}" != "usb" ];then
  if [ "$P_BP_ID" = "" ];then
@@ -381,10 +374,7 @@ if [ "$PDRV" = "" ];then
  fatal_error "$ONE_TRY_FN not found. Dropping out to console..."
 fi
 
-BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
 RAMSIZE=$(free | grep -o 'Mem: .*' | tr -s ' ' | cut -f 2 -d ' ') #total physical ram (less shared video). 110405
-
-PUPMODE=5
 
 mount -t tmpfs tmpfs /mnt/tmpfs
 
@@ -403,136 +393,182 @@ if [ "$SFS_ERR" ];then
 fi
 PUP_LAYER="$SFS_MP"
 
-if [ "$FDRV" = "" ];then
- find_onepupdrv "$F_PART" "$F_BP_FN" "$F_DEF_FN" "f"
- [ "$ONE_FN" ] && FDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-fi
+find_onepupdrv "$F_PART" "$F_BP_FN" "$F_DEF_FN" "f"
+[ "$ONE_FN" ] && FDRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$FDRV" ] && { LOADMSG="fdrv"; load_onepupdrv "$FDRV" "f"; }
 
-if [ "$ZDRV" = "" ];then
- find_onepupdrv "$Z_PART" "$Z_BP_FN" "$Z_DEF_FN" "z"
- [ "$ONE_FN" ] && ZDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-fi
+find_onepupdrv "$Z_PART" "$Z_BP_FN" "$Z_DEF_FN" "z"
+[ "$ONE_FN" ] && ZDRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$ZDRV" ] && { LOADMSG="zdrv"; load_onepupdrv "$ZDRV" "z"; }
 
-if [ "$YDRV" = "" ];then
- find_onepupdrv "$Y_PART" "$Y_BP_FN" "$Y_DEF_FN" "y"
- [ "$ONE_FN" ] && YDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-fi
+find_onepupdrv "$Y_PART" "$Y_BP_FN" "$Y_DEF_FN" "y"
+[ "$ONE_FN" ] && YDRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$YDRV" ] && { LOADMSG="ydrv"; load_onepupdrv "$YDRV" "y" "p"; }
 
-if [ "$ADRV" = "" ];then
- find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
- [ "$ONE_FN" ] && ADRV="$ONE_PART,$ONE_FS,$ONE_FN"
-fi
+find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
+[ "$ONE_FN" ] && ADRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$ADRV" ] && { LOADMSG="adrv"; load_onepupdrv "$ADRV" "a" "p"; }
 
-#setup SAVEPART
-if [ "$SAVEPART" = "" ];then
- [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
- [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
- [ "$SAVEPART" ] || SAVEPART="$P_PART"
+if [ "$P_PART" ];then
+ BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
+ #setup SAVEPART
+ if [ "$SAVEPART" = "" ];then
+  [ "$P_MP" ] || P_MP="$(mount | grep -m1 "/dev/$P_PART " | cut -f 3 -d ' ')"
+  [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
+  [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
+  [ "$SAVEPART" ] || SAVEPART="$P_PART"
+ fi
 fi
 
-SAVE_FS="$(echo "$USE_PARTS" | grep "$SAVEPART" | cut -f 2 -d '|')"
-OLD_MP="$(mount | grep -m1 "/dev/$SAVEPART " | cut -f 3 -d ' ')"
-SAVE_MP="/mnt/dev_save"
-[ -d "$SAVE_MP" ] || mkdir -p $SAVE_MP
-if [ "$OLD_MP" = "" ];then
- mntfunc $SAVE_FS /dev/$SAVEPART $SAVE_MP #-t $SAVE_FS /dev/$SAVEPART $SAVE_MP
- [ $? -eq 0 ] || SAVE_MP=""
-else
- mount -o move $OLD_MP $SAVE_MP
- [ $? -eq 0 ] || SAVE_MP=""
-# SAVE_MP="$OLD_MP"
+SAVE_MP=""
+if [ "$SAVEPART" ];then
+ #ensure that save partition is mounted
+ SAVE_FS="$(echo "$USE_PARTS" | grep "$SAVEPART" | cut -f 2 -d '|')"
+ OLD_MP="$(mount | grep -m1 "/dev/$SAVEPART " | cut -f 3 -d ' ')"
+ SAVE_MP="/mnt/dev_save"
+ [ -d "$SAVE_MP" ] || mkdir -p $SAVE_MP
+ if [ "$OLD_MP" = "" ];then
+  mntfunc $SAVE_FS /dev/$SAVEPART $SAVE_MP #-t $SAVE_FS /dev/$SAVEPART $SAVE_MP
+  [ $? -eq 0 ] || SAVE_MP=""
+ else
+  mount -o move $OLD_MP $SAVE_MP
+  [ $? -eq 0 ] || SAVE_MP=""
+ fi
 fi
 
 #initmodules stuff goes here
 
+#find PUPSAVE, sortout pupmode
+PUPMODE=5
 PUPSAVE=""
-if [ "$SAVE_MP" ];then
- SAVE_FS_IS_LINUX=""
- case $SAVE_FS in
-  ext2|ext3|ext4|reiserfs|minix|f2fs) SAVE_FS_IS_LINUX="yes" ;;
- esac
- if [ "$SAVE_BP_FN" ];then
-  if [ -d "${SAVE_MP}${SAVE_BP_FN}" ];then
-   [ "$SAVE_FS_IS_LINUX" = "yes" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
-  else
-   [ -f "${SAVE_MP}${SAVE_BP_FN}" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
+if [ "$SAVE_MP" ];then #have mounted save? partition
+ if [ "$(ls -l /dev/$BOOTDRV | cut -f4 -d' ')" = "cdrom" ];then #booting on optical, is it multisession?...
+  FND_MULTIFOLDER="$(find $SAVE_MP -maxdepth 1 -xdev -type d -name 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9] | grep -v ' ' | sed -e 's%^/mnt/pdrv%%' | head -n 1)"
+  if [ "$FND_MULTIFOLDER" ];then #multisession cd/dvd
+   if [ "$PRAMONLY" != "yes" ];then
+    PUPMODE=77
+    PUPSAVE="${SAVEPART},${SAVE_FS},${FND_MULTIFOLDER}"
+   fi
   fi
-  [ "$PUPSAVE" ] || echo "$SAVEPART, $SAVE_BP_FN file not found." >> /tmp/bootinit.log
+ elif [ "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
+  PUPMODE=6
+  PUPSAVE="${SAVEPART},${SAVE_FS},/"
  else
-  if [ "$SAVE_FS_IS_LINUX" = "yes" ];then
-   SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*)"
+  SAVE_FS_IS_LINUX=""
+  case $SAVE_FS in
+   ext2|ext3|ext4|reiserfs|minix|f2fs) SAVE_FS_IS_LINUX="yes" ;;
+  esac
+  if [ "$SAVE_BP_FN" ];then
+   if [ -d "${SAVE_MP}${SAVE_BP_FN}" ];then
+    [ "$SAVE_FS_IS_LINUX" = "yes" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
+   else
+    [ -f "${SAVE_MP}${SAVE_BP_FN}" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
+   fi
+   [ "$PUPSAVE" ] || echo "$SAVEPART, $SAVE_BP_FN file not found." >> /tmp/bootinit.log
   else
-   SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs)"
-  fi
-  NUMPUPSAVES=0
-  for ONE_SAVE in $SAVE_FILES;do
-   PUPSAVES="${PUPSAVES}${PSUBDIR}/$(basename $ONE_SAVE) "
-   NUMPUPSAVES=$(expr $NUMPUPSAVES + 1)
-  done
-  if [ $NUMPUPSAVES -eq 1 ];then
-   PUPSAVE="$SAVEPART,$SAVE_FS,$(echo -n $PUPSAVES)"
-  elif [ $NUMPUPSAVES -gt 1 ];then
-   CNTSAVE=1
-   echo -e "\\033[1;36m" >/dev/console #36=aquablue
-   echo "Type a number to choose which personal file to use:" > /dev/console
-   echo "0  none" > /dev/console
-   for ONEFILE in $PUPSAVES;do
-    echo -e "${CNTSAVE}  ${SAVEPART}\\033[10G${ONEFILE}" > /dev/console #10 means move to that column.
-    CNTSAVE=$(expr $CNTSAVE + 1)
+   if [ "$SAVE_FS_IS_LINUX" = "yes" ];then
+    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*)"
+   else
+    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs)"
+   fi
+   NUMPUPSAVES=0
+   for ONE_SAVE in $SAVE_FILES;do
+    PUPSAVES="${PUPSAVES}${PSUBDIR}/$(basename $ONE_SAVE) "
+    NUMPUPSAVES=$(expr $NUMPUPSAVES + 1)
    done
-   echo -en "\\033[0;39m" >/dev/console
-   read NUMSAVE
-   [ $NUMSAVE -ne 0 ] && PUPSAVE="$SAVEPART,$SAVE_FS,$(echo -n $PUPSAVES | cut -f $NUMSAVE -d ' ')"
+   if [ $NUMPUPSAVES -eq 1 ];then
+    PUPSAVE="$SAVEPART,$SAVE_FS,$(echo -n $PUPSAVES)"
+   elif [ $NUMPUPSAVES -gt 1 ];then
+    CNTSAVE=1
+    echo -e "\\033[1;36m" >/dev/console #36=aquablue
+    echo "Type a number to choose which personal file to use:" > /dev/console
+    echo "0  none" > /dev/console
+    for ONEFILE in $PUPSAVES;do
+     echo -e "${CNTSAVE}  ${SAVEPART}\\033[10G${ONEFILE}" > /dev/console #10 means move to that column.
+     CNTSAVE=$(expr $CNTSAVE + 1)
+    done
+    echo -en "\\033[0;39m" >/dev/console
+    read NUMSAVE
+    [ $NUMSAVE -ne 0 ] && PUPSAVE="$SAVEPART,$SAVE_FS,$(echo -n $PUPSAVES | cut -f $NUMSAVE -d ' ')"
+   fi
   fi
+  [ "$PUPSAVE" ] && PUPMODE=12
  fi
 fi
-#echo "PUPSAVE=$PUPSAVE" > /dev/console
 
-#load PUPSAVE
 if [ "$PUPSAVE" ];then
- if [ "${PMEDIA:3}" = "flash" ];then
-  PUPMODE=13
-  SAVE_LAYER="/pup_ro1"
- else
-  PUPMODE=12
-  SAVE_LAYER="/pup_rw"
+ #refine pupmode
+ if [ $PUPMODE -eq 6 -o $PUPMODE -eq 12 ];then
+  [ "${PMEDIA:3}" = "flash" ] && PUPMODE=$(expr $PUPMODE + 1)
  fi
- SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
- if [ -d "$SAVE_FN" ];then #savefolder
-  rm -r -f $SAVE_LAYER
-  ln -s $SAVE_FN $SAVE_LAYER
- elif [ -s "$SAVE_FN" ];then #savefile
-  ONE_LOOP="$(losetup -f)"
-  losetup $ONE_LOOP $SAVE_FN
-  SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
-  [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
-  mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
-  [ $? -eq 0 ] || PUPSAVE=""  
- else
-  PUPSAVE=""
- fi
-fi
-if [ "$PUPSAVE" ];then
- [ -d ${SAVE_LAYER}/initrd/tmp ] && rm -r -f ${SAVE_LAYER}/initrd/tmp
- mkdir -p ${SAVE_LAYER}/initrd/tmp
- [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
- [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
- if [ $PUPMODE -eq 13 ];then
-  [ -d /mnt/tmpfs/pup_rw/tmp ] && rm -r -f /mnt/tmpfs/pup_rw/tmp
-  mkdir -p /mnt/tmpfs/pup_rw/tmp
-  mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
- else
-  [ -d /mnt/tmpfs/tmp ] && rm -r -f /mnt/tmpfs/tmp
-  mkdir -p /mnt/tmpfs/tmp
-  ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp #/tmp after switch_root
-  mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
-  rm -r -f /mnt/tmpfs/pup_rw
- fi
- KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+ #load PUPSAVE
+ case $PUPMODE in
+  77) #load folders
+   PUPMODE=77 #place holder
+  ;;
+  13) #prepend ro1
+   SAVE_LAYER="/pup_ro1"
+   SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
+   if [ -d "$SAVE_FN" ];then #savefolder
+    rm -r -f $SAVE_LAYER
+    ln -s $SAVE_FN $SAVE_LAYER
+   elif [ -s "$SAVE_FN" ];then #savefile
+    ONE_LOOP="$(losetup -f)"
+    losetup $ONE_LOOP $SAVE_FN
+    SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
+    [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+    mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
+    [ $? -eq 0 ] || PUPSAVE=""  
+   else
+    PUPSAVE=""
+   fi
+   #adsjust stack
+   if [ "$PUPSAVE" ];then
+    [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
+    [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
+    [ -d /mnt/tmpfs/pup_rw/tmp ] && rm -r -f /mnt/tmpfs/pup_rw/tmp
+    mkdir -p /mnt/tmpfs/pup_rw/tmp
+    mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
+    KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+   fi
+  ;;
+  12) #replace rw
+   SAVE_LAYER="/pup_rw"
+   SAVE_FN="${SAVE_MP}$(echo "$PUPSAVE" | cut -f 3 -d ',')"
+   if [ -d "$SAVE_FN" ];then #savefolder
+    rm -r -f $SAVE_LAYER
+    ln -s $SAVE_FN $SAVE_LAYER
+   elif [ -s "$SAVE_FN" ];then #savefile
+    ONE_LOOP="$(losetup -f)"
+    losetup $ONE_LOOP $SAVE_FN
+    SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
+    [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+    mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
+    [ $? -eq 0 ] || PUPSAVE=""  
+   else
+    PUPSAVE=""
+   fi
+   #adsjust stack
+   if [ "$PUPSAVE" ];then
+    [ -d ${SAVE_LAYER}/tmp ] && rm -r -f ${SAVE_LAYER}/tmp
+    [ -L ${SAVE_LAYER}/tmp ] && rm -f ${SAVE_LAYER}/tmp
+    [ -d /mnt/tmpfs/tmp ] && rm -r -f /mnt/tmpfs/tmp
+    mkdir -p /mnt/tmpfs/tmp
+    ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp #/tmp after switch_root
+    mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
+    rm -r -f /mnt/tmpfs/pup_rw
+    KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+   fi
+  ;;
+  7) #prepend ro1
+   SAVE_LAYER="/pup_ro1"
+   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  ;;
+  6) #replace rw
+   SAVE_LAYER="/pup_rw"
+   KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  ;;
+ esac
 else
  SAVE_MP=""
 fi
@@ -577,13 +613,12 @@ else
  echo "LASTUNIONRECORD=''" >> /pup_new/etc/rc.d/BOOTCONFIG
 fi
 
-for ONEMNT in `mount | cut -f 3 -d ' ' | grep -v 'pup_new' | grep '^/pup_' | tr '\n' ' '`
-do
+echo -n "Performing a 'switch_root' to the layered filesystem..." > /dev/console
+for ONEMNT in `mount | cut -f 3 -d ' ' | grep -v 'pup_new' | grep '^/pup_' | tr '\n' ' '`;do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
-for ONEMNT in `mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' '`
-do
+for ONEMNT in `mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' '`;do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
@@ -601,6 +636,8 @@ cp -a /DISTRO_SPECS /pup_new/etc #james - so we don't duplicate in main SFS
 cp /init /pup_new/initrd/
 chmod -x /pup_new/initrd/init
 
+[ -d "/pup_new/initrd/tmp" ] && rm -r -f /pup_new/initrd/tmp
+mkdir -p /pup_new/initrd/tmp
 cp -af /tmp/* /pup_new/initrd/tmp/ #keep any log files.
 
 if [ "$RDSH" = "yes" ];then
