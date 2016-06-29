@@ -175,6 +175,7 @@ load_onepupdrv() {
   #decide whether to copy .sfs's to ram
   [ "$PNOCOPY" = "yes" ] || COPYCONTENDER='yes'
   [ "$PCOPY" = "yes" ] && COPYCONTENDER='yes'
+  [ "$PRAMONLY" = "yes" ] && COPYCONTENDER='yes'
   [ "$COPYCONTENDER" = "yes" ] && [ $RAMSIZE -gt 400000 ] && [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
  fi
  ONE_LOOP="$(losetup -f)"
@@ -478,15 +479,13 @@ fi
 #find PUPSAVE, sortout pupmode
 PUPMODE=5
 PUPSAVE=""
-if [ "$SAVE_MP" ];then #have mounted save? partition
+if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
  #check for ppupmodes that don't have a savefile/savefolder
  if [ "$(ls -l /dev/$BOOTDRV | cut -f4 -d' ')" = "cdrom" ];then #booting on optical, is it multisession?...
   FND_MULTIFOLDER="$(find $SAVE_MP -maxdepth 1 -xdev -type d -name 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9] | grep -v ' ' | sed -e 's%^/mnt/pdrv%%' | head -n 1)"
   if [ "$FND_MULTIFOLDER" ];then #multisession cd/dvd
-   if [ "$PRAMONLY" != "yes" ];then
-    PUPMODE=77
-    PUPSAVE="${SAVEPART},${SAVE_FS},${FND_MULTIFOLDER}"
-   fi
+   PUPMODE=77
+   PUPSAVE="${SAVEPART},${SAVE_FS},${FND_MULTIFOLDER}"
   fi
  elif [ "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
   PUPMODE=6
