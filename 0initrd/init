@@ -508,9 +508,9 @@ if [ "$SAVE_MP" ];then #have mounted save? partition
   else
    #have to find savefile/savefolder
    if [ "$SAVE_FS_IS_LINUX" = "yes" ];then
-    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*)"
+    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save* 2>/dev/null)"
    else
-    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs)"
+    SAVE_FILES="$(ls -d ${SAVE_MP}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs 2>/dev/null)"
    fi
    NUMPUPSAVES=0
    for ONE_SAVE in $SAVE_FILES;do
@@ -657,7 +657,7 @@ fi
 
 sync
 #killall -USR1 hotplug2 #v423
-umount /proc/bus/usb
+[ -d "/proc/bus/usb" ] && umount /proc/bus/usb
 umount /sys
 umount /dev
 umount /proc
