@@ -228,7 +228,7 @@ load_onepupdrv() {
 
 load_savefile(){
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
- echo "Loading personal file $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
+ echo "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
  SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
  if [ -d "$SAVE_FN" ];then #savefolder
   rm -r -f $SAVE_LAYER
