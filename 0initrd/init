@@ -14,8 +14,6 @@ export LANG=C #w004
 PATH="/bin:/sbin"
 KERNELVER="$(uname -r)"
 
-PUPDESKFLG=1 #130515 this may be changed to 0 by 3builddistro.
-
 # always use DEVTMPFS now.
 mount -t devtmpfs devtmpfs /dev
 DEVTMPFSFLG=1 #130618 set it from 3builddistro.
