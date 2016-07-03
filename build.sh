@@ -11,7 +11,7 @@ DEFAULT_x86=i686
 DEFAULT_ARM=armv6l
 #DEFAULT_ARM64=aarch64
 
-PREBUILT_BINARIES="http://01micko.com/initrd_tarballs/initrd_progs-20160610-static.tar.xz"
+PREBUILT_BINARIES="http://01micko.com/initrd_tarballs/initrd_progs-20160630-static.tar.xz"
 
 ARCH=`uname -m`
 OS_ARCH=$ARCH
@@ -90,6 +90,7 @@ while [ "$1" ] ; do
 		-ask_keymap) ASK_KEYMAP=yes    ; shift ;; #for 3builddistro
 		-nord)     INITRD_CREATE=no    ; shift ;;
 		-auto)     PROMPT=no           ; shift ;;
+		-v)        V=-v                ; shift ;;
 		-lang)     LOCALE="$2"         ; shift 2
 			       [ "$LOCALE" = "" ] && { echo "$0 -locale: No locale specified" ; exit 1; } ;;
 		-keymap)   KEYMAP="$2"         ; shift 2
@@ -118,13 +119,17 @@ done
 function use_prebuilt_binaries() {
 	[ ! "$PREBUILT_BINARIES" ] && { echo "ERROR"; exit 1 ; }
 	zfile=0sources/${PREBUILT_BINARIES##*/}
+	if [ -f "$zfile" ] ; then
+		#verify file integrity
+		tar -taf "$zfile" &>/dev/null || rm -f "$zfile"
+	fi
 	if [ ! -f "$zfile" ] ; then
 		mkdir -p 0sources
 		wget -P 0sources --no-check-certificate "$PREBUILT_BINARIES"
-		[ $? -eq 0 ] || { rm -f "$zfile" ; exit 1 ; }
+		[ $? -eq 0 ] || { rm -f "$zfile"; echo "ERROR"; exit 1 ; }
 	fi
 	echo "* Extracting ${zfile##*/}..."
-	tar -xaf "$zfile" || { rm -f "$zfile" ; exit 1 ; }
+	tar -xaf "$zfile" || { rm -f "$zfile"; echo "ERROR"; exit 1 ; }
 }
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -395,17 +400,18 @@ function generate_initrd() {
 	done
 
 	echo
-	if [ ! -f "$DISTRO_SPECS" ] ; then
-		if [ -f ../0initrd/DISTRO_SPECS ] ; then
-			DISTRO_SPECS='../0initrd/DISTRO_SPECS'
-		else
-			[ -f /etc/DISTRO_SPECS ] && DISTRO_SPECS='/etc/DISTRO_SPECS'
-			[ -f /initrd/DISTRO_SPECS ] && DISTRO_SPECS='/initrd/DISTRO_SPECS'
-		fi
+	if [ ! -f "$DISTRO_SPECS" -a -f ../DISTRO_SPECS ] ; then
+		DISTRO_SPECS='../DISTRO_SPECS'
 	fi
-	cp -f ${V} "${DISTRO_SPECS}" .
-	. "${DISTRO_SPECS}"
-	
+	if [ ! -f "$DISTRO_SPECS" -a ! -f ../0initrd/DISTRO_SPECS ] ; then
+		[ -f /etc/DISTRO_SPECS ] && DISTRO_SPECS='/etc/DISTRO_SPECS'
+		[ -f /initrd/DISTRO_SPECS ] && DISTRO_SPECS='/initrd/DISTRO_SPECS'
+	fi
+	[ -f "$DISTRO_SPECS" ] && cp -f ${V} "${DISTRO_SPECS}" .
+	[ -x ../init ] && cp -f ${V} ../init .
+
+	. ./DISTRO_SPECS
+
 	cp -f ${V} ../pkg/busybox_static/bb-*-symlinks bin # essential
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
