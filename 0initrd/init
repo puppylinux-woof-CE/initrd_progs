@@ -624,7 +624,7 @@ for ONEMNT in `mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' '`;do
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
 
-if [ "$PUPSAVE" -a -d "/pup_new/initrd${SAVE_FN}" ];then
+if [ "$PUPSAVE" ];then
  if [ "$SAVE_LAYER" -a -L "$SAVE_LAYER" ];then
   rm -r -f "/pup_new/initrd${SAVE_LAYER}"
   ln -s "/initrd${SAVE_FN}" "/pup_new/initrd${SAVE_LAYER}" #for after switch
