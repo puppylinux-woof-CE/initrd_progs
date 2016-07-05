@@ -478,28 +478,31 @@ fi
 PUPMODE=5
 PUPSAVE=""
 if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
- #check for ppupmodes that don't have a savefile/savefolder
+ #check if save partition is linux
+ SAVE_FS_IS_LINUX=""
+ case $SAVE_FS in
+  ext2|ext3|ext4|reiserfs|minix|f2fs) SAVE_FS_IS_LINUX="yes" ;;
+ esac
+ #check for cd multisession
  if [ "$(ls -l /dev/$BOOTDRV | cut -f4 -d' ')" = "cdrom" ];then #booting on optical, is it multisession?...
   FND_MULTIFOLDER="$(find $SAVE_MP -maxdepth 1 -xdev -type d -name 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9] | grep -v ' ' | sed -e 's%^/mnt/pdrv%%' | head -n 1)"
   if [ "$FND_MULTIFOLDER" ];then #multisession cd/dvd
    PUPMODE=77
    PUPSAVE="${SAVEPART},${SAVE_FS},${FND_MULTIFOLDER}"
   fi
- elif [ "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
+ fi
+ #check for save to partition 
+ if [ "$SAVE_FS_IS_LINUX" = "yes" -a "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
   PUPMODE=6
   PUPSAVE="${SAVEPART},${SAVE_FS},/"
  fi
- #sortout savefile/savefolder to possibly -> pupmode=12
+ #not sorted yet, may be pupmode=12
  if [ $PUPMODE -eq 5 ];then
-  SAVE_FS_IS_LINUX=""
-  case $SAVE_FS in
-   ext2|ext3|ext4|reiserfs|minix|f2fs) SAVE_FS_IS_LINUX="yes" ;;
-  esac
-  if [ "$SAVE_BP_FN" ];then
+  if [ "$SAVE_BP_FN" ];then #check boot spec
    if [ -d "${SAVE_MP}${SAVE_BP_FN}" ];then
     [ "$SAVE_FS_IS_LINUX" = "yes" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
    else
-    [ -f "${SAVE_MP}${SAVE_BP_FN}" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
+    [ -s "${SAVE_MP}${SAVE_BP_FN}" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
    fi
    [ "$PUPSAVE" ] || echo "$SAVEPART, $SAVE_BP_FN file not found." >> /tmp/bootinit.log
   else
