@@ -254,6 +254,18 @@ load_savefile(){
  fi
 }
 
+load_savepart() {
+ rm -r -f $SAVE_LAYER
+ ln -s $SAVE_MP $SAVE_LAYER
+}
+
+copy_folders() {
+ DESTDIR="/mnt/tmpfs/pup_ro1"
+ [ -d "$DESTDIR" ] || mkdir -p $DESTDIR
+ ln -s $DESTDIR $SAVE_LAYER
+ BKFOLDERS="$(ls -1 -r $SAVE_MP | grep '^20[0-9][0-9]')"
+}
+
 prepend_dir() {
  rm -r -f ${SAVE_LAYER}/tmp #in case last boot was pupmode=12
  #adjust stack
@@ -585,7 +597,8 @@ fi
 #load savefile if required, then setup stack
 case $PUPMODE in
  77) #load folders
-  PUPMODE=77 #place holder
+  copy_folders
+  prepend_dir
  ;;
  13) #prepend ro1
   load_savefile
@@ -596,13 +609,11 @@ case $PUPMODE in
   [ "$PUPSAVE" ] && replace_dir
  ;;
  7) #prepend ro1
-  rm -r -f $SAVE_LAYER
-  ln -s $SAVE_MP $SAVE_LAYER
+  load_savepart
   prepend_dir
  ;;
  6) #replace rw
-  rm -r -f $SAVE_LAYER
-  ln -s $SAVE_MP $SAVE_LAYER
+  load_savepart
   replace_dir
  ;;
  5)
