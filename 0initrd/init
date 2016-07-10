@@ -110,6 +110,19 @@ ensure_mounted() {
  [ $? -eq 0 ] || ONE_MP=""
 }
 
+ensure_save_mounted() {
+ ensure_mounted "$SAVEPART" "$SAVE_MP"
+ if [ "$ONE_MP" ];then
+  if [ "$ONE_MP" != "$SAVE_MP" ];then
+   mount -o move $ONE_MP $SAVE_MP
+   [ $? -eq 0 ] || SAVE_MP=""
+  fi
+ else
+  SAVE_MP=""
+ fi
+ [ "$SAVE_MP" ] && SAVE_FS="$ONE_FS"
+}
+
 find_onepupdrv() {
 # "$1" - partition - ex: sda3
 # "$2" - specified filename - ex: /pup/mydrv-1.2.3.sfs
@@ -229,32 +242,33 @@ load_onepupdrv() {
  SFS_ERR=""
 }
 
-load_savefile(){
- SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
-#need to ensure partition is mounted if pmedia=cd
- if [ "$PMEDIA" = "cd" ];then
-  SAVEPART="$(echo "$PUPSAVE" | cut -f 1 -d ',')"
-  ensure_mounted "$SAVEPART" "/mnt/dev_save"
-  [ "$ONE_MP" ] || return
- fi
- echo "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
- SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
- if [ -d "$SAVE_FN" ];then #savefolder
-  rm -r -f $SAVE_LAYER
-  ln -s $SAVE_FN $SAVE_LAYER
- elif [ -s "$SAVE_FN" ];then #savefile
+load_ext_file(){
   ONE_LOOP="$(losetup -f)"
   losetup $ONE_LOOP $SAVE_FN
   SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
   [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
   mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
   [ $? -eq 0 ] || PUPSAVE=""  
+}
+
+load_save_file(){
+ SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
+ echo "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
+ SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
+ if [ -d "$SAVE_FN" ];then #savefolder
+  rm -r -f $SAVE_LAYER
+  ln -s $SAVE_FN $SAVE_LAYER
+ elif [ -f "$SAVE_FN" ];then #savefile
+  load_ext_file
  else
+  PUPMODE=5
   PUPSAVE=""
+  SAVE_MP=""
+  SAVE_LAYER=""
  fi
 }
 
-load_savepart() {
+load_save_part() {
  rm -r -f $SAVE_LAYER
  ln -s $SAVE_MP $SAVE_LAYER
 }
@@ -302,7 +316,8 @@ search_for_save() {
   SAVE_FILES="$(ls -d ${1}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs 2>/dev/null)"
  fi
  for ONE_SAVE in $SAVE_FILES;do
-  PUPSAVES="${PUPSAVES}${2},${3},${PSUBDIR}/$(basename $ONE_SAVE) "
+  #validate savefiles here
+  [ -d "$ONE_SAVE" -o -s "$ONE_SAVE" ] && PUPSAVES="${PUPSAVES}${2},${3},${PSUBDIR}/$(basename $ONE_SAVE) "
  done
 }
 
@@ -510,16 +525,7 @@ fi
 if [ "$SAVEPART" ];then
  #ensure that save partition is mounted
  SAVE_MP="/mnt/dev_save"
- ensure_mounted "$SAVEPART" "$SAVE_MP"
- if [ "$ONE_MP" ];then
-  if [ "$ONE_MP" != "$SAVE_MP" ];then
-   mount -o move $ONE_MP $SAVE_MP
-   [ $? -eq 0 ] || SAVE_MP=""
-  fi
- else
-  SAVE_MP=""
- fi
- [ "$SAVE_MP" ] && SAVE_FS="$ONE_FS"
+ ensure_save_mounted
 fi
 
 #initmodules stuff goes here
@@ -568,8 +574,10 @@ if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
      echo -e "\\033[1;36m" >/dev/console #36=aquablue
      echo "Type a number to choose which personal file to use:" > /dev/console
      echo "0  none" > /dev/console
-     for ONEFILE in $PUPSAVES;do
-      echo -e "${CNTSAVE}  ${SAVEPART}\\033[10G${ONEFILE}" > /dev/console #10 means move to that column.
+     for ONETRY in $PUPSAVES;do
+      ONE_PART="$(echo -n "$ONETRY" | cut -f 1 -d ',')"
+      ONE_FILE="$(echo -n "$ONETRY" | cut -f 3 -d ',')"
+      echo -e "${CNTSAVE}  ${ONE_PART}\\033[10G${ONE_FILE}" > /dev/console #10 means move to that column.
       CNTSAVE=$(expr $CNTSAVE + 1)
      done
      echo -en "\\033[0;39m" >/dev/console
@@ -578,7 +586,11 @@ if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
     fi
    fi
   fi
-  [ "$PUPSAVE" ] && PUPMODE=12
+  if [ "$PUPSAVE" ];then
+   PUPMODE=12
+   ONE_PART="$(echo -n "$PUPSAVE" | cut -f 1 -d ',')"
+   [ "$ONE_PART" != "$SAVEPART" ] && { SAVEPART="$ONE_PART"; ensure_save_mounted; }
+  fi
  fi
 fi
 
@@ -601,19 +613,19 @@ case $PUPMODE in
   prepend_dir
  ;;
  13) #prepend ro1
-  load_savefile
+  load_save_file
   [ "$PUPSAVE" ] && prepend_dir
  ;;
  12) #replace rw
-  load_savefile
+  load_save_file
   [ "$PUPSAVE" ] && replace_dir
  ;;
  7) #prepend ro1
-  load_savepart
+  load_save_part
   prepend_dir
  ;;
  6) #replace rw
-  load_savepart
+  load_save_part
   replace_dir
  ;;
  5)
