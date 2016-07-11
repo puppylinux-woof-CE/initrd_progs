@@ -151,35 +151,7 @@ find_onepupdrv() {
  fi
 }
 
-load_onepupdrv() {
-# "$1" - sfs spec - ex: sdb2,ext4,/pup/mydrv-1.2.3.sfs
-# "$2" - suffix for "pup_" branch directory - ex: a
-# "$3" - prepend after rw layer indicator - ex: p
- ONE_LAYER=""
- SFS_ERR=""
- [ "$1" ] || return
- [ "$2" ] || return
- ONE_PART="$(echo "${1}" | cut -f 1 -d ',')"
- [ "$ONE_PART" ] || return
- ONE_REL_FN="$(echo "${1}" | cut -f 3 -d ',')"
- [ "$ONE_REL_FN" ] || return
- ONE_SFX="${2}"
- ONE_PREP="${3}"
- SFS_ERR="1"
- if [ "$ONE_PART" = "rootfs" ];then #humongous initrd.
-  ONE_MP="" #actually it's '/'.
-  COPY2RAM='yes' #actually it is already in ram, but code below puts it in a tmpfs.
- else
-  if [ "$ONE_PART" = "$P_PART" ];then
-   ONE_MP="$P_MP"
-  else
-   ONE_MP="$(mount | grep -m1 "/dev/$ONE_PART " | cut -f 3 -d ' ')"
-   [ "$ONE_MP" ] || return
-  fi
- fi
- ONE_FN="${ONE_MP}${ONE_REL_FN}"
- [ -s "$ONE_FN" ] || return #sfs not Ok
- ONE_BASENAME="$(basename $ONE_REL_FN)"
+load_sfs_file() {
  [ "$LOADMSG" ] && echo -n "Loading the '${ONE_BASENAME}' ${LOADMSG} file..." > /dev/console
  if [ "$COPY2RAM" = "" ];then
   COPY2RAM="no"
@@ -222,7 +194,44 @@ load_onepupdrv() {
  mount -r -t squashfs -o noatime $ONE_LOOP $SFS_MP > /dev/console 2>&1
  [ $? -eq 0 ] || return
  ONE_LAYER="$SFS_MP=ro"
+}
+
+setup_onepupdrv() {
+# "$1" - sfs spec - ex: sdb2,ext4,/pup/mydrv-1.2.3.sfs
+# "$2" - suffix for "pup_" branch directory - ex: a
+# "$3" - prepend after rw layer indicator - ex: p
+ ONE_LAYER=""
+ SFS_ERR=""
+ [ "$1" ] || return
+ [ "$2" ] || return
+ ONE_PART="$(echo "${1}" | cut -f 1 -d ',')"
+ [ "$ONE_PART" ] || return
+ ONE_REL_FN="$(echo "${1}" | cut -f 3 -d ',')"
+ [ "$ONE_REL_FN" ] || return
+ ONE_SFX="${2}"
+ ONE_PREP="${3}"
+ SFS_ERR="1"
+ if [ "$ONE_PART" = "rootfs" ];then #humongous initrd.
+  ONE_MP="" #actually it's '/'.
+  COPY2RAM='yes' #actually it is already in ram, but load_sfs_file code puts it in a tmpfs.
+ else
+  if [ "$ONE_PART" = "$P_PART" ];then
+   ONE_MP="$P_MP"
+  else
+   ONE_MP="$(mount | grep -m1 "/dev/$ONE_PART " | cut -f 3 -d ' ')"
+   [ "$ONE_MP" ] || return
+  fi
+ fi
  SFS_ERR="2"
+ ONE_FN="${ONE_MP}${ONE_REL_FN}"
+ ONE_BASENAME="$(basename $ONE_REL_FN)"
+ if [ -f "$ONE_FN" ];then
+  [ -s "$ONE_FN" ] || return #sfs not Ok
+  load_sfs_file
+  SFS_ERR="3"
+  [ "$ONE_LAYER" ] || return #sfs not Ok
+ fi
+ SFS_ERR="4"
  if [ "$(ls /pup_new)" = "" ];then #no aufs stack yet
   if [ "$ONE_SFX" = "p" ];then #create stack
    [ -d "/mnt/tmpfs/pup_rw" ] || mkdir /mnt/tmpfs/pup_rw
@@ -488,31 +497,36 @@ COPY2RAM=""
 
 COPYMSG='copying to ram' #purple
 LOADMSG="main"
-load_onepupdrv "$PDRV" "p"
+setup_onepupdrv "$PDRV" "p"
 if [ "$SFS_ERR" ];then
- if [ "$SFS_ERR" = "1" -a "$ONE_FN" ];then
-  fatal_error "$ONE_BASENAME not Ok. Dropping out to console..."
- elif [ "$SFS_ERR" = "2" -a "$ONE_LAYER" ];then
-  fatal_error "aufs $ONE_LAYER failed. Dropping out to console..."
- fi
+ case $SFS_ERR in
+  1)
+   fatal_error "$ONE_PART not mounted. Dropping out to console..." ;;
+  2)
+   fatal_error "$ONE_BASENAME not Ok. Dropping out to console..." ;;
+  3)
+   fatal_error "mount of sfs $ONE_BASENAME failed. Dropping out to console..." ;;
+  4)
+   fatal_error "aufs mount of $ONE_LAYER failed. Dropping out to console..." ;;
+ esac
 fi
 PUP_LAYER="$SFS_MP"
 
 find_onepupdrv "$F_PART" "$F_BP_FN" "$F_DEF_FN" "f"
 [ "$ONE_FN" ] && FDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-[ "$FDRV" ] && { LOADMSG="fdrv"; load_onepupdrv "$FDRV" "f"; }
+[ "$FDRV" ] && { LOADMSG="fdrv"; setup_onepupdrv "$FDRV" "f"; }
 
 find_onepupdrv "$Z_PART" "$Z_BP_FN" "$Z_DEF_FN" "z"
 [ "$ONE_FN" ] && ZDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-[ "$ZDRV" ] && { LOADMSG="zdrv"; load_onepupdrv "$ZDRV" "z"; }
+[ "$ZDRV" ] && { LOADMSG="zdrv"; setup_onepupdrv "$ZDRV" "z"; }
 
 find_onepupdrv "$Y_PART" "$Y_BP_FN" "$Y_DEF_FN" "y"
 [ "$ONE_FN" ] && YDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-[ "$YDRV" ] && { LOADMSG="ydrv"; load_onepupdrv "$YDRV" "y" "p"; }
+[ "$YDRV" ] && { LOADMSG="ydrv"; setup_onepupdrv "$YDRV" "y" "p"; }
 
 find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
 [ "$ONE_FN" ] && ADRV="$ONE_PART,$ONE_FS,$ONE_FN"
-[ "$ADRV" ] && { LOADMSG="adrv"; load_onepupdrv "$ADRV" "a" "p"; }
+[ "$ADRV" ] && { LOADMSG="adrv"; setup_onepupdrv "$ADRV" "a" "p"; }
 
 if [ "$P_PART" ];then
  BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
