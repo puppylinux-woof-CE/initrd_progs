@@ -229,18 +229,10 @@ setup_onepupdrv() {
   [ -s "$ONE_FN" ] || return #sfs not Ok
   load_sfs_file
   SFS_ERR="3"
-  [ "$ONE_LAYER" ] || return #sfs not Ok
+  [ "$ONE_LAYER" ] || return #sfs mount failed
  fi
  SFS_ERR="4"
- if [ "$(ls /pup_new)" = "" ];then #no aufs stack yet
-  if [ "$ONE_SFX" = "p" ];then #create stack
-   [ -d "/mnt/tmpfs/pup_rw" ] || mkdir /mnt/tmpfs/pup_rw
-   mount -t aufs -o udba=reval,diropq=w,br=/mnt/tmpfs/pup_rw=rw:$ONE_LAYER,xino=/mnt/tmpfs/.aufs.xino unionfs /pup_new 
-   [ $? -eq 0 ] || return
-  else
-   return
-  fi
- elif [ "$ONE_PREP" ];then
+ if [ "$ONE_PREP" ];then
   mount -o remount,add:1:$ONE_LAYER /pup_new
   [ $? -eq 0 ] || return
  else
@@ -491,6 +483,9 @@ fi
 RAMSIZE=$(free | grep -o 'Mem: .*' | tr -s ' ' | cut -f 2 -d ' ') #total physical ram (less shared video). 110405
 
 mount -t tmpfs tmpfs /mnt/tmpfs
+[ -d "/mnt/tmpfs/pup_rw" ] || mkdir /mnt/tmpfs/pup_rw
+mount -t aufs -o udba=reval,diropq=w,br=/mnt/tmpfs/pup_rw=rw,xino=/mnt/tmpfs/.aufs.xino unionfs /pup_new 
+[ $? -eq 0 ] || fatal_error "Failed to create empty aufs stack"
 
 NEWUNIONRECORD=""
 COPY2RAM=""
