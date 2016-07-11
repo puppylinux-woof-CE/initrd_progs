@@ -103,7 +103,7 @@ ensure_mounted() {
 # "$2" - mountpoint - ex: /mnt/pdrv
  ONE_MP="$(mount | grep -m1 "/dev/${1} " | cut -f 3 -d ' ')"
  [ "$ONE_MP" ] && return
- ONE_FS="$(echo "$USE_PARTS" | grep "${1}" | cut -f 2 -d '|')"
+ ONE_FS="$(echo "$HAVE_PARTS" | grep "${1}" | cut -f 2 -d '|')"
  ONE_MP="${2}"
  [ -d "$ONE_MP" ] || mkdir -p $ONE_MP
  mntfunc $ONE_FS /dev/${1} $ONE_MP #-t $ONE_FS /dev/$ONE_PART $ONE_MP
@@ -251,24 +251,27 @@ load_ext_file(){
   [ $? -eq 0 ] || PUPSAVE=""  
 }
 
-load_save_file(){
+setup_save_file(){
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
  echo "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
  SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
- if [ -d "$SAVE_FN" ];then #savefolder
-  rm -r -f $SAVE_LAYER
-  ln -s $SAVE_FN $SAVE_LAYER
- elif [ -f "$SAVE_FN" ];then #savefile
+ if [ -f "$SAVE_FN" ];then #savefile
   load_ext_file
+ elif [ -d "$SAVE_FN" ];then #savefolder
+  rm -r -f "$SAVE_LAYER"
+  ln -s "$SAVE_FN" "$SAVE_LAYER"
  else
-  PUPMODE=5
   PUPSAVE=""
+ fi
+#[ "$PUPSAVE" ] && decrypt directory at SAVE_LAYER
+ if [ "$PUPSAVE" = "" ];then
+  PUPMODE=5
   SAVE_MP=""
   SAVE_LAYER=""
  fi
 }
 
-load_save_part() {
+setup_save_part() {
  rm -r -f $SAVE_LAYER
  ln -s $SAVE_MP $SAVE_LAYER
 }
@@ -298,19 +301,19 @@ replace_dir() {
  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
 }
 
-get_fs_linux() {
+set_fs_linux() {
 # "$1" - file system type - ex: ext4
- SAVE_FS_IS_LINUX=""
+ ONE_FS_IS_LINUX=""
  case ${1} in
-  ext2|ext3|ext4|reiserfs|minix|f2fs) SAVE_FS_IS_LINUX="yes" ;;
+  ext2|ext3|ext4|reiserfs|minix|f2fs) ONE_FS_IS_LINUX="yes" ;;
  esac
 }
 
-search_for_save() {
+find_save_file() {
 # "$1" - mount point - ex:  /mnt/pdrv
 # "$2" - partition name - ex: sdb2
 # "$3" - file system type - ex: ext4
- if [ "$SAVE_FS_IS_LINUX" = "yes" ];then
+ if [ "$ONE_FS_IS_LINUX" = "yes" ];then
   SAVE_FILES="$(ls -d ${1}${PSUBDIR}/${DISTRO_FILE_PREFIX}save* 2>/dev/null)"
  else
   SAVE_FILES="$(ls -d ${1}${PSUBDIR}/${DISTRO_FILE_PREFIX}save*.?fs 2>/dev/null)"
@@ -323,16 +326,16 @@ search_for_save() {
 
 search_func() {
  if [ "${1}" ];then
-  TRY_PARTS="$(echo "$USE_PARTS" | grep -E "${1}")"
+  TRY_PARTS="$(echo "$HAVE_PARTS" | grep -E "${1}")"
  else
-  TRY_PARTS="$USE_PARTS"
+  TRY_PARTS="$HAVE_PARTS"
  fi
  [ "$TRY_PARTS" ] || return
  for ONETRY in $TRY_PARTS;do
   ONE_PART="$(echo -n "$ONETRY" | cut -f 1 -d '|')"
   if [ "$PMEDIA" = "cd" ];then
    ensure_mounted "$ONE_PART" "/mnt/pdrv"
-   [ "$ONE_MP" ] && { get_fs_linux "$ONE_FS"; search_for_save "$ONE_MP" "$ONE_PART" "$ONE_FS"; }
+   [ "$ONE_MP" ] && { set_fs_linux "$ONE_FS"; find_save_file "$ONE_MP" "$ONE_PART" "$ONE_FS"; }
   fi
   find_onepupdrv "$ONE_PART" "$P_BP_FN" "$P_DEF_FN" "p"
   if [ "$ONE_FN" ];then
@@ -348,7 +351,7 @@ search_func() {
 get_part_info() {
  ls -1 /sys/block | grep -E '^scd|^sd|^mmc|^sr' > /tmp/ALLDRVS0
  PCPARTSALL="$(/sbin/probepart_init -k)"
- USE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
+ HAVE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
 }
 
 umount_unneeded() {
@@ -535,7 +538,7 @@ PUPMODE=5
 PUPSAVE=""
 if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
  #check if save partition is linux
- get_fs_linux "$SAVE_FS"
+ set_fs_linux "$SAVE_FS"
  #check for cd multisession
  if [ "$(ls -l /dev/$BOOTDRV | cut -f4 -d' ')" = "cdrom" ];then #booting on optical, is it multisession?...
   FND_MULTIFOLDER="$(find $SAVE_MP -maxdepth 1 -xdev -type d -name 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9] | grep -v ' ' | sed -e 's%^/mnt/pdrv%%' | head -n 1)"
@@ -545,7 +548,7 @@ if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
   fi
  fi
  #check for save to partition 
- if [ "$SAVE_FS_IS_LINUX" = "yes" -a "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
+ if [ "$ONE_FS_IS_LINUX" = "yes" -a "$PSUBDIR" = "" -a -f "$SAVE_MP/etc/rc.d/PUPSTATE" ];then
   PUPMODE=6
   PUPSAVE="${SAVEPART},${SAVE_FS},/"
  fi
@@ -554,14 +557,14 @@ if [ "$SAVE_MP" -a "$PRAMONLY" != "yes" ];then #have mounted save? partition
   #check boot spec
   if [ "$SAVE_BP_FN" ];then
    if [ -d "${SAVE_MP}${SAVE_BP_FN}" ];then
-    [ "$SAVE_FS_IS_LINUX" = "yes" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
+    [ "$ONE_FS_IS_LINUX" = "yes" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
    else
     [ -s "${SAVE_MP}${SAVE_BP_FN}" ] && PUPSAVE="$SAVEPART,$SAVE_FS,$SAVE_BP_FN"
    fi
    [ "$PUPSAVE" ] || echo "$SAVEPART, $SAVE_BP_FN file not found." >> /tmp/bootinit.log
   else
    #have to find savefile/savefolder
-   [ "$PUPSAVES" ] || search_for_save "$SAVE_MP" "$SAVEPART" "$SAVE_FS"
+   [ "$PUPSAVES" ] || find_save_file "$SAVE_MP" "$SAVEPART" "$SAVE_FS"
    if [ "$PUPSAVES" ];then
     NUMPUPSAVES=0
     for ONE_SAVE in $PUPSAVES;do
@@ -613,19 +616,19 @@ case $PUPMODE in
   prepend_dir
  ;;
  13) #prepend ro1
-  load_save_file
+  setup_save_file
   [ "$PUPSAVE" ] && prepend_dir
  ;;
  12) #replace rw
-  load_save_file
+  setup_save_file
   [ "$PUPSAVE" ] && replace_dir
  ;;
  7) #prepend ro1
-  load_save_part
+  setup_save_part
   prepend_dir
  ;;
  6) #replace rw
-  load_save_part
+  setup_save_part
   replace_dir
  ;;
  5)
