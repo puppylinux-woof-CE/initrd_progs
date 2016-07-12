@@ -120,6 +120,19 @@ ensure_save_mounted() {
  [ "$SAVE_MP" ] && SAVE_FS="$ONE_FS"
 }
 
+find_drv_file() {
+# "$1" - specified filename - ex: /pup/mydrv-1.2.3.sfs
+# "$2" - default filename - ex: adrv_tahr_6.0.5.sfs
+ ONE_FN=""
+ [ "${1}" ] || [ "${2}" ] || return
+ if [ "${1}" ];then
+  ONE_TRY_FN="${1}"
+ else
+  ONE_TRY_FN="${PSUBDIR}/${2}"
+ fi
+ [ -f "${ONE_MP}${ONE_TRY_FN}" ] && ONE_FN="$ONE_TRY_FN"
+}
+
 find_onepupdrv() {
 # "$1" - partition - ex: sda3
 # "$2" - specified filename - ex: /pup/mydrv-1.2.3.sfs
@@ -134,18 +147,10 @@ find_onepupdrv() {
   ONE_PART="$P_PART"
  fi
  [ "$ONE_PART" ] || return
- if [ "${2}" ];then
-  ONE_TRY_FN="${2}"
- else
-  ONE_TRY_FN="${PSUBDIR}/${3}"
- fi
  ensure_mounted "$ONE_PART" "/mnt/${4}drv"
  [ "$ONE_MP" ] || return
- if [ -f "${ONE_MP}${ONE_TRY_FN}" ];then
-  ONE_FN="$ONE_TRY_FN"
- else
-  [ "${2}" ] && echo "$ONE_PART, $ONE_TRY_FN file not found." >> /tmp/bootinit.log
- fi
+ find_drv_file "${2}" "${3}"
+ [ "$ONE_FN" = "" -a "${2}" ] && echo "$ONE_PART, $ONE_TRY_FN file not found." >> /tmp/bootinit.log
 }
 
 load_sfs_file() {
@@ -335,20 +340,23 @@ search_func() {
  [ "$TRY_PARTS" ] || return
  for ONETRY in $TRY_PARTS;do
   ONE_PART="$(echo -n "$ONETRY" | cut -f 1 -d '|')"
-  if [ "$LOOK_SAVE" ];then
-   ensure_mounted "$ONE_PART" "/mnt/pdrv"
-   [ "$ONE_MP" ] && { set_fs_linux "$ONE_FS"; find_save_file "$ONE_MP" "$ONE_PART" "$ONE_FS"; }
-  fi
-  if [ "$LOOK_PUP" ];then
-   find_onepupdrv "$ONE_PART" "$P_BP_FN" "$P_DEF_FN" "p"
-   if [ "$ONE_FN" ];then
-    PDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-    P_MP="$ONE_MP"
-    P_PART="$ONE_PART"
-    break;
+  ensure_mounted "$ONE_PART" "/mnt/pdrv"
+  if [ "$ONE_MP" ];then
+   if [ "$LOOK_SAVE" ];then
+    set_fs_linux "$ONE_FS"
+    find_save_file "$ONE_MP" "$ONE_PART" "$ONE_FS"
    fi
+   if [ "$LOOK_PUP" ];then
+    find_drv_file "$P_BP_FN" "$P_DEF_FN"
+    if [ "$ONE_FN" ];then
+     PDRV="$ONE_PART,$ONE_FS,$ONE_FN"
+     P_MP="$ONE_MP"
+     P_PART="$ONE_PART"
+     break;
+    fi
+   fi
+   umount $ONE_MP
   fi
-  umount $ONE_MP
  done 
 }
 
