@@ -81,11 +81,8 @@ decode_id() {
  fi
 }
 
-decode_all_ids() {
+decode_other_ids() {
  #get ONE_PART from DEV or ID specified in sfs boot params
- BLKIDOUT=""
- decode_id "$P_BP_ID"
- [ "$ONE_PART" ] && { P_PART="$ONE_PART"; P_BP_ID=""; }
  decode_id "$Z_BP_ID"
  [ "$ONE_PART" ] && { Z_PART="$ONE_PART"; Z_BP_ID=""; }
  decode_id "$F_BP_ID"
@@ -338,16 +335,18 @@ search_func() {
  [ "$TRY_PARTS" ] || return
  for ONETRY in $TRY_PARTS;do
   ONE_PART="$(echo -n "$ONETRY" | cut -f 1 -d '|')"
-  if [ "$PMEDIA" = "cd" ];then
+  if [ "$LOOK_SAVE" ];then
    ensure_mounted "$ONE_PART" "/mnt/pdrv"
    [ "$ONE_MP" ] && { set_fs_linux "$ONE_FS"; find_save_file "$ONE_MP" "$ONE_PART" "$ONE_FS"; }
   fi
-  find_onepupdrv "$ONE_PART" "$P_BP_FN" "$P_DEF_FN" "p"
-  if [ "$ONE_FN" ];then
-   PDRV="$ONE_PART,$ONE_FS,$ONE_FN"
-   P_MP="$ONE_MP"
-   P_PART="$ONE_PART"
-   break;
+  if [ "$LOOK_PUP" ];then
+   find_onepupdrv "$ONE_PART" "$P_BP_FN" "$P_DEF_FN" "p"
+   if [ "$ONE_FN" ];then
+    PDRV="$ONE_PART,$ONE_FS,$ONE_FN"
+    P_MP="$ONE_MP"
+    P_PART="$ONE_PART"
+    break;
+   fi
   fi
   umount $ONE_MP
  done 
@@ -357,6 +356,15 @@ get_part_info() {
  ls -1 /sys/block | grep -E '^scd|^sd|^mmc|^sr' > /tmp/ALLDRVS0
  PCPARTSALL="$(/sbin/probepart_init -k)"
  HAVE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
+}
+
+wait_for_usb() {
+ [ -e /tmp/flag-usb-ready ] && return
+ echo -n "Waiting for USB storage." > /dev/console 
+ /sbin/wait4usb q
+ get_part_info
+ BLKIDOUT=""
+ echo "" > /dev/console
 }
 
 umount_unneeded() {
@@ -384,7 +392,7 @@ fatal_error() {
 
 [ $PSUBDIR ] && [ "${PSUBDIR:0:1}" != "/" ] && PSUBDIR="/${PSUBDIR}" #add leading /.
 
-[ $pdev1 ] && P_PART=$pdev1 #boot parameter, partition have booted off. ex: hda3
+[ $pdev1 ] && PDRV=$pdev1 #boot parameter, partition have booted off. ex: hda3
 #100915 requested by technosaurus (formats get changed further down)...
 [ $pdrv ] && PDRV=$pdrv #format partition:<path><filename> ex: sda2:/slacko/puppy_slacko_6.3.0.sfs
 [ $pupsfs ] && PDRV=$pupsfs
@@ -450,40 +458,37 @@ PUPSAVES=""
 KEEPMOUNTED=""
 BLKIDOUT=""
 
-decode_all_ids
-if [ "${PMEDIA:0:3}" != "usb" ];then
- if [ "$P_BP_ID" = "" ];then
-  if [ "$P_PART" = "" ];then
-   search_func
-  else
-   find_onepupdrv "$P_PART" "$P_BP_FN" "$P_DEF_FN" "p"
-   [ "$ONE_FN" ] && { PDRV="$ONE_PART,$ONE_FS,$ONE_FN"; P_MP="$ONE_MP"; }
-  fi
+#establish PDRV
+P_PART=""; LOOK_PUP=""; LOOK_SAVE=""
+if [ "$P_BP_ID" ];then #specified as parameter
+ decode_id "$P_BP_ID"
+ [ "$ONE_PART" ] && { P_PART="$ONE_PART"; P_BP_ID=""; }
+ if [ "$P_PART"  = "" ];then
+  wait_for_usb
+  decode_id "$P_BP_ID"
+  [ "$ONE_PART" ] && { P_PART="$ONE_PART"; P_BP_ID=""; }
+ fi
+ find_onepupdrv "$P_PART" "$P_BP_FN" "$P_DEF_FN" "p"
+ [ "$ONE_FN" ] && { PDRV="$ONE_PART,$ONE_FS,$ONE_FN"; P_MP="$ONE_MP"; }
+elif [ "$PDRV" = "" ];then #not specified anywhere
+ #determine what to search for
+ [ "$PMEDIA" = "cd" ] && LOOK_SAVE="yes"
+ [ "$SAVE_BP_ID" -o "$PSAVEMARK" ] && LOOK_SAVE=""
+ LOOK_PUP=yes
+fi
+if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
+ [ "${PMEDIA:0:3}" != "usb" ] && search_func
+ if [ "$P_PART" = "" ];then
+  wait_for_usb
+  USBDRVS="$(find /sys/block -maxdepth 1 -name 'sd*' -o -name 'sr*' | xargs -l readlink 2>/dev/null | grep '/usb[0-9]' | rev | cut -f 1 -d '/' | rev | tr '\n' ' ')"
+  [ "$USBDRVS" ] && search_func "$(echo -n $USBDRVS | tr ' ' '|')"
  fi
 fi
-if [ "${PMEDIA:0:3}" = "usb" -o "$P_PART" = "" -o "$P_BP_ID" -o "$Z_BP_ID" -o "$F_BP_ID" -o "$A_BP_ID" -o "$Y_BP_ID" -o "$SAVE_BP_ID" ];then
- /sbin/wait4usb &
- while [ ! -e /tmp/flag-usb-ready ];do #wait for usb process to complete.
-  usleep 250000 #microseconds
- done
- get_part_info
- USBDRVS="$(find /sys/block -maxdepth 1 -name 'sd*' -o -name 'sr*' | xargs -l readlink 2>/dev/null | grep '/usb[0-9]' | rev | cut -f 1 -d '/' | rev | tr '\n' ' ')"
- if [ "$USBDRVS" ];then
-  BLKIDOUT=""
-  decode_all_ids
-  if [ "$P_PART" = "" ];then
-   search_func "$(echo -n $USBDRVS | tr ' ' '|')"
-  else
-   find_onepupdrv "$P_PART" "$P_BP_FN" "$P_DEF_FN" "p"
-   [ "$ONE_FN" ] && { PDRV="$ONE_PART,$ONE_FS,$ONE_FN"; P_MP="$ONE_MP"; }
-  fi
- fi
-fi
-echo "" > /dev/console
 if [ "$PDRV" = "" ];then
  fatal_error "$ONE_TRY_FN not found. Dropping out to console..."
 fi
 
+#have pup...sfs, now try to load it
 RAMSIZE=$(free | grep -o 'Mem: .*' | tr -s ' ' | cut -f 2 -d ' ') #total physical ram (less shared video). 110405
 
 mount -t tmpfs tmpfs /mnt/tmpfs
@@ -511,6 +516,12 @@ if [ "$SFS_ERR" ];then
 fi
 PUP_LAYER="$SFS_MP"
 
+#have basic system, now try to add optional stuff
+decode_other_ids
+if [ "$Z_BP_ID" -o "$F_BP_ID" -o "$A_BP_ID" -o "$Y_BP_ID" -o "$SAVE_BP_ID" ];then
+ wait_for_usb
+ decode_other_ids
+fi
 find_onepupdrv "$F_PART" "$F_BP_FN" "$F_DEF_FN" "f"
 [ "$ONE_FN" ] && FDRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$FDRV" ] && { LOADMSG="fdrv"; setup_onepupdrv "$FDRV" "f"; }
@@ -529,8 +540,7 @@ find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
 
 if [ "$P_PART" ];then
  BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
- #setup SAVEPART
- if [ "$SAVEPART" = "" ];then
+ if [ "$SAVEPART" = "" ];then #setup SAVEPART
   [ "$P_MP" ] || P_MP="$(mount | grep -m1 "/dev/$P_PART " | cut -f 3 -d ' ')"
   [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
   [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
@@ -538,8 +548,7 @@ if [ "$P_PART" ];then
  fi
 fi
 
-if [ "$SAVEPART" ];then
- #ensure that save partition is mounted
+if [ "$SAVEPART" ];then #ensure that save partition is mounted
  SAVE_MP="/mnt/dev_save"
  ensure_save_mounted
 fi
