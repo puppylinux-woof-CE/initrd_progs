@@ -264,7 +264,9 @@ setup_save_file(){
   PUPSAVE=""
  fi
 #[ "$PUPSAVE" ] && decrypt directory at SAVE_LAYER
- if [ "$PUPSAVE" = "" ];then
+ if [ "$PUPSAVE" ];then
+  SAVE_NAME="$(basename $SAVE_REL_FN)"
+ else
   PUPMODE=5
   SAVE_MP=""
   SAVE_LAYER=""
@@ -274,6 +276,7 @@ setup_save_file(){
 setup_save_part() {
  rm -r -f $SAVE_LAYER
  ln -s $SAVE_MP $SAVE_LAYER
+ SAVE_NAME="$SAVEPART"
 }
 
 copy_folders() {
@@ -288,6 +291,7 @@ prepend_dir() {
  #adjust stack
  mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+ [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
 }
 
 replace_dir() {
@@ -299,6 +303,7 @@ replace_dir() {
  mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
  rm -r -f /mnt/tmpfs/pup_rw
  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+ [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
 }
 
 set_fs_linux() {
