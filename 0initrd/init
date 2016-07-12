@@ -225,12 +225,11 @@ setup_onepupdrv() {
  SFS_ERR="2"
  ONE_FN="${ONE_MP}${ONE_REL_FN}"
  ONE_BASENAME="$(basename $ONE_REL_FN)"
- if [ -f "$ONE_FN" ];then
-  [ -s "$ONE_FN" ] || return #sfs not Ok
-  load_sfs_file
-  SFS_ERR="3"
-  [ "$ONE_LAYER" ] || return #sfs mount failed
- fi
+ #validate sfs here
+ [ -s "$ONE_FN" ] || return #sfs not Ok
+ SFS_ERR="3"
+ load_sfs_file
+ [ "$ONE_LAYER" ] || return #sfs mount failed
  SFS_ERR="4"
  if [ "$ONE_PREP" ];then
   mount -o remount,add:1:$ONE_LAYER /pup_new
