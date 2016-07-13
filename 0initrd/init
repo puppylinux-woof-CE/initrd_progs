@@ -27,6 +27,20 @@ P_DEF_FN="$DISTRO_PUPPYSFS"
 
 [ $loglevel ] && LOGLEVEL=$loglevel #v2.22
 
+fsck_ext() {
+# "$1" - partition device - ex: /dev/sdb2
+# "$2" - fstype - ex: ext2
+ case $2 in
+  ext2|ext3|ext4)
+   if [ "$(echo "$FSCKDPARTS" | grep "${1}")" = "" ];then
+#    echo "" > /dev/console
+    e2fsck -y ${1} > /dev/console 2>&1
+    FSCKDPARTS="${FSCKDPARTS}${1} "
+   fi
+  ;;
+ esac
+}
+
 mntfunc() {
  MNT_T="$1"    #ex: vfat
  MNT_DEV="$2"  #ex: /dev/sda1
@@ -51,6 +65,7 @@ mntfunc() {
    mount -t $MNT_T -o $VFAT_OUT_PARAM $MNT_DEV $MNT_DIR
   ;;
   *)
+   [ "$PFSCKP" = "yes" ] && fsck_ext "$MNT_DEV" "$MNT_T"
    if [ "$MNT_O" = "" ];then
     mount -t $MNT_T $MNT_DEV $MNT_DIR
    else
@@ -284,12 +299,13 @@ setup_onepupdrv() {
 }
 
 load_ext_file(){
-  ONE_LOOP="$(losetup -f)"
-  losetup $ONE_LOOP $SAVE_FN
-  SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
-  [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
-  mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
-  [ $? -eq 0 ] || PUPSAVE=""  
+ ONE_LOOP="$(losetup -f)"
+ losetup $ONE_LOOP $SAVE_FN
+ SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
+ [ "$PFSCK" = "yes" ] && fsck_ext "$ONE_LOOP" "$SFFS"
+ [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+ mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
+ [ $? -eq 0 ] || PUPSAVE=""  
 }
 
 setup_save_file(){
@@ -475,6 +491,7 @@ if [ "$pfix" ];then
    copy)    PCOPY="yes";;         #copy .sfs files into ram.
    nocopy)  PNOCOPY="yes";;        #do not copy .sfs files into ram (default is copy if enough ram).
    fsck)    PFSCK="yes";;         #do a fsck of ${DISTRO_FILE_PREFIX}save file.
+   fsckp)   PFSCKP="yes";;        #do fsck before first mount of ext partitions
    [0-9]*)  PIGNORELAST=$ONEFIX;; #blacklist last $ONEFIX folders (multisession).
   esac
  done
@@ -510,6 +527,7 @@ ATAOPTICALDRIVES="$(grep '^sr' /tmp/ALLDRVS0 | tr '\n' ' ')"
 
 PUPSAVES=""
 KEEPMOUNTED=""
+FSCKDPARTS=""
 BLKIDOUT=""
 
 #establish PDRV
