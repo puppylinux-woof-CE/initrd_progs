@@ -61,6 +61,50 @@ mntfunc() {
  return $?
 }
 
+check_status() #args: [-critical] $RET_VAL "$ERROR_MSG"
+{
+  ERROR_CRITICAL=""
+  [ "$1" = "-critical" ] && { ERROR_CRITICAL="yes" ; shift; }
+  RET_VAL=$1
+  shift
+  ERROR_MSG="$@"
+  if [ $RET_VAL -eq 0 ] ; then
+    /bin/echo -en "\\033[74G" >/dev/console #move to column 72. 110426: 74
+    /bin/echo -en "\\033[1;32m" >/dev/console
+    /bin/echo -en "done" >/dev/console
+    /bin/echo -e "\\033[0;39m" >/dev/console
+  else
+    /bin/echo -en "\\033[72G" >/dev/console #110426 move to column 72.
+    /bin/echo -en "\\033[1;31m" >/dev/console
+    /bin/echo -en "failed" >/dev/console
+    /bin/echo -e "\\033[0;39m" >/dev/console
+    echo -en "\\033[1;35m" >/dev/console #35=purple
+    echo -n "Dumping last lines of /tmp/bootinit.log..." >/dev/console
+    /bin/echo -e "\\033[0;39m" >/dev/console
+    echo -en "\\033[1;31m" >/dev/console #31=red
+    cat /tmp/bootinit.log | tail -n 4 >/dev/console
+    /bin/echo -en "\\033[0;39m" >/dev/console
+    echo -en "\\033[1;35m" >/dev/console #35=purple
+    echo -n "Dumping last lines of kernel log..." >/dev/console
+    /bin/echo -e "\\033[0;39m" >/dev/console
+    echo -en "\\033[1;31m" >/dev/console #31=red
+    dmesg | tail -n 4 >/dev/console
+    /bin/echo -en "\\033[0;39m" >/dev/console
+    #exit to initial ramdisk shell...
+    [ "$RDSH" != "" ] && exec /bin/sh >/dev/console 2>&1
+    if [ "$ERROR_CRITICAL" = "yes" ] ; then
+      echo -en "\\033[1;35m" >/dev/console #35=purple
+      [ "$ERROR_MSG" != "" ] && echo "*** $ERROR_MSG" >/dev/console
+      echo "*** Error is too critical, dropping out to console..." >/dev/console
+      echo -en "\\033[0;39m" >/dev/console
+      exec /bin/sh >/dev/console 2>&1
+    else
+      echo "Pausing for 60 seconds..." >/dev/console
+      sleep 60
+    fi
+  fi
+}
+
 decode_spec() {
  ONE_BP_ID=""; ONE_BP_FN=""
  [ "${1}" ] || return
@@ -104,7 +148,7 @@ ensure_mounted() {
  ONE_MP="${2}"
  [ -d "$ONE_MP" ] || mkdir -p $ONE_MP
  mntfunc $ONE_FS /dev/${1} $ONE_MP #-t $ONE_FS /dev/$ONE_PART $ONE_MP
- [ $? -eq 0 ] || ONE_MP=""
+ [ $? -eq 0 ] || { ONE_MP=""; echo "${1} on $ONE_MP as $ONE_FS mount failed." >> /tmp/bootinit.log; }
 }
 
 ensure_save_mounted() {
@@ -189,13 +233,13 @@ load_sfs_file() {
   losetup $ONE_LOOP $ONE_FN
   [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
  fi
-[ "$LOADMSG" ] && echo "" > /dev/console
  SFS_MP="/pup_${ONE_SFX}"
  [ "$ONE_SFX" = "p" ] && SFS_MP="/pup_ro2"
  [ -d "$SFS_MP" ] || mkdir $SFS_MP
  mount -r -t squashfs -o noatime $ONE_LOOP $SFS_MP > /dev/console 2>&1
- [ $? -eq 0 ] || return
- ONE_LAYER="$SFS_MP=ro"
+ STATUS=$?
+ [ $STATUS -eq 0 ] && ONE_LAYER="$SFS_MP=ro"
+ [ "$LOADMSG" ] && check_status $STATUS
 }
 
 setup_onepupdrv() {
@@ -250,7 +294,7 @@ load_ext_file(){
 
 setup_save_file(){
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
- echo "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
+ echo -n "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
  SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
  if [ -f "$SAVE_FN" ];then #savefile
   load_ext_file
@@ -263,10 +307,12 @@ setup_save_file(){
 #[ "$PUPSAVE" ] && decrypt directory at SAVE_LAYER
  if [ "$PUPSAVE" ];then
   SAVE_NAME="$(basename $SAVE_REL_FN)"
+  check_status 0
  else
   PUPMODE=5
   SAVE_MP=""
   SAVE_LAYER=""
+  check_status 1
  fi
 }
 
@@ -287,8 +333,12 @@ prepend_dir() {
  rm -r -f ${SAVE_LAYER}/tmp #in case last boot was pupmode=12
  #adjust stack
  mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new
- KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
- [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+ if [ $? -eq 0 ];then
+  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+ else
+  echo "adding $SAVE_LAYER to aufs stack failed." >> /tmp/bootinit.log
+ fi
 }
 
 replace_dir() {
@@ -298,9 +348,13 @@ replace_dir() {
  ln -s /initrd/mnt/tmpfs/tmp ${SAVE_LAYER}/tmp
  #adjust stack
  mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
- rm -r -f /mnt/tmpfs/pup_rw
- KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
- [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+ if [ $? -eq 0 ];then
+  rm -r -f /mnt/tmpfs/pup_rw
+  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+  [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+ else
+  echo "adding $SAVE_LAYER to aufs stack failed." >> /tmp/bootinit.log
+ fi
 }
 
 set_fs_linux() {
@@ -364,10 +418,10 @@ get_part_info() {
 wait_for_usb() {
  [ -e /tmp/flag-usb-ready ] && return
  echo -n "Waiting for USB storage." > /dev/console 
- /sbin/wait4usb q
+ /sbin/wait4usb
  get_part_info
  BLKIDOUT=""
- echo "" > /dev/console
+ check_status 0
 }
 
 umount_unneeded() {
@@ -381,10 +435,7 @@ fatal_error() {
 # "$1" - message - ex: puppy_tahr_6.0.5.sfs not found
  KEEPMOUNTED=""
  umount_unneeded
- echo -en "\\033[1;31m" >/dev/console #31=red
- echo -n "${1}" >/dev/console
- /bin/echo -e "\\033[0;39m" >/dev/console
- exec /bin/sh >/dev/console 2>&1
+ check_status -critical 1 "$1"
 }
 
 [ $pkeys ] && PKEYS=$pkeys #boot parameter, keyboard layout w476
@@ -488,7 +539,7 @@ if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
  fi
 fi
 if [ "$PDRV" = "" ];then
- fatal_error "$ONE_PART $ONE_TRY_FN not found. Dropping out to console..."
+ fatal_error "$ONE_PART $ONE_TRY_FN not found."
 fi
 
 #have pup...sfs, now try to load it
@@ -509,15 +560,15 @@ STATUS=$?
 if [ $STATUS -gt 0 ];then
  case $STATUS in
   1)
-   fatal_error "$PDRV spec incomplete. Dropping out to console..." ;;
+   fatal_error "$PDRV information is incomplete." ;;
   2)
-   fatal_error "$ONE_PART not mounted. Dropping out to console..." ;;
+   fatal_error "$ONE_PART is not mounted." ;;
   3)
-   fatal_error "$ONE_PART $ONE_REL_FN not Ok. Dropping out to console..." ;;
+   fatal_error "$ONE_PART $ONE_REL_FN is not Ok." ;;
   4)
-   fatal_error "$ONE_PART $ONE_REL_FN mount of sfs failed. Dropping out to console..." ;;
+   fatal_error "$ONE_PART $ONE_REL_FN mount of sfs failed." ;;
   5)
-   fatal_error "aufs mount of $ONE_LAYER failed. Dropping out to console..." ;;
+   fatal_error "aufs mount of $ONE_LAYER failed." ;;
  esac
 fi
 PUP_LAYER="$SFS_MP"
