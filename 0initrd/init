@@ -203,16 +203,14 @@ setup_onepupdrv() {
 # "$2" - suffix for "pup_" branch directory - ex: a
 # "$3" - prepend after rw layer indicator - ex: p
  ONE_LAYER=""
- SFS_ERR=""
- [ "$1" ] || return
- [ "$2" ] || return
+ [ "$1" ] || return 1
+ [ "$2" ] || return 1
  ONE_PART="$(echo "${1}" | cut -f 1 -d ',')"
- [ "$ONE_PART" ] || return
+ [ "$ONE_PART" ] || return 1
  ONE_REL_FN="$(echo "${1}" | cut -f 3 -d ',')"
- [ "$ONE_REL_FN" ] || return
+ [ "$ONE_REL_FN" ] || return 1
  ONE_SFX="${2}"
  ONE_PREP="${3}"
- SFS_ERR="1"
  if [ "$ONE_PART" = "rootfs" ];then #humongous initrd.
   ONE_MP="" #actually it's '/'.
   COPY2RAM='yes' #actually it is already in ram, but load_sfs_file code puts it in a tmpfs.
@@ -221,27 +219,24 @@ setup_onepupdrv() {
    ONE_MP="$P_MP"
   else
    ONE_MP="$(mount | grep -m1 "/dev/$ONE_PART " | cut -f 3 -d ' ')"
-   [ "$ONE_MP" ] || return
+   [ "$ONE_MP" ] || return 2
   fi
  fi
- SFS_ERR="2"
  ONE_FN="${ONE_MP}${ONE_REL_FN}"
  ONE_BASENAME="$(basename $ONE_REL_FN)"
  #validate sfs here
- [ -s "$ONE_FN" ] || return #sfs not Ok
- SFS_ERR="3"
+ [ -s "$ONE_FN" ] || return 3 #sfs not Ok
  load_sfs_file
- [ "$ONE_LAYER" ] || return #sfs mount failed
- SFS_ERR="4"
+ [ "$ONE_LAYER" ] || return 4 #sfs mount failed
  if [ "$ONE_PREP" ];then
   mount -o remount,add:1:$ONE_LAYER /pup_new
-  [ $? -eq 0 ] || return
+  [ $? -eq 0 ] || return 5
  else
   mount -o remount,append:$ONE_LAYER /pup_new
-  [ $? -eq 0 ] || return
+  [ $? -eq 0 ] || return 5
  fi
  NEWUNIONRECORD="${NEWUNIONRECORD}${ONE_BASENAME} "
- SFS_ERR=""
+ return 0
 }
 
 load_ext_file(){
@@ -493,7 +488,7 @@ if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
  fi
 fi
 if [ "$PDRV" = "" ];then
- fatal_error "$ONE_TRY_FN not found. Dropping out to console..."
+ fatal_error "$ONE_PART $ONE_TRY_FN not found. Dropping out to console..."
 fi
 
 #have pup...sfs, now try to load it
@@ -510,15 +505,18 @@ COPY2RAM=""
 COPYMSG='copying to ram' #purple
 LOADMSG="main"
 setup_onepupdrv "$PDRV" "p"
-if [ "$SFS_ERR" ];then
- case $SFS_ERR in
+STATUS=$?
+if [ $STATUS -gt 0 ];then
+ case $STATUS in
   1)
-   fatal_error "$ONE_PART not mounted. Dropping out to console..." ;;
+   fatal_error "$PDRV spec incomplete. Dropping out to console..." ;;
   2)
-   fatal_error "$ONE_BASENAME not Ok. Dropping out to console..." ;;
+   fatal_error "$ONE_PART not mounted. Dropping out to console..." ;;
   3)
-   fatal_error "mount of sfs $ONE_BASENAME failed. Dropping out to console..." ;;
+   fatal_error "$ONE_PART $ONE_REL_FN not Ok. Dropping out to console..." ;;
   4)
+   fatal_error "$ONE_PART $ONE_REL_FN mount of sfs failed. Dropping out to console..." ;;
+  5)
    fatal_error "aufs mount of $ONE_LAYER failed. Dropping out to console..." ;;
  esac
 fi
