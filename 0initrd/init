@@ -320,11 +320,11 @@ load_ext_file(){
 setup_save_file(){
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
  echo -n "Loading personal storage $SAVE_REL_FN ($SAVEPART)..." > /dev/console 
+ rm -r -f "$SAVE_LAYER"
  SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
  if [ -f "$SAVE_FN" ];then #savefile
   load_ext_file
  elif [ -d "$SAVE_FN" ];then #savefolder
-  rm -r -f "$SAVE_LAYER"
   ln -s "$SAVE_FN" "$SAVE_LAYER"
  else
   PUPSAVE=""
