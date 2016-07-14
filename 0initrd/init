@@ -307,11 +307,41 @@ setup_onepupdrv() {
  return 0
 }
 
-load_ext_file(){
+resize_ext_file() {
+ . $RESIZE_FN
+ [ "$PUPSAVEFILEX" = "$SAVE_REL_FN" ] || return
+ if [ ! -e /bin/e2fsck ];then
+  echo -e -n "\\033[1;31m SORRY, cannot resize ${PUPSAVEFILEX} \\033[0;39m" > /dev/console #31=red
+  rm -f $RESIZE_FN
+ else
+  SAVE_SZ_FN="$SAVE_FN"
+  rm -f $RESIZE_FN
+  echo > /dev/console
+  echo -n "Increasing $PUPSAVEFILEX by $KILOBIG Kbytes, please wait..." >/dev/console
+  dd if=/dev/zero bs=1024 count=$KILOBIG >> $SAVE_SZ_FN #131225 
+  sync
+ fi
+}
+
+resize_ext_fs() {
+ fsck_ext ${1} ${2}
+ resize2fs -pf ${1} #no size, will fill all of file.
+ sync
+ check_status 0 #note, e2fsck gives an error even though it works. v2.21 maybe okay now.
+ echo -n "...continuing with loading $PUPSAVEFILE..." > /dev/console
+}
+
+load_ext_file() {
+ SAVE_SZ_FN=""
+ RESIZE_FN="$(dirname $SAVE_FN)/pupsaveresizenew.txt"
+#delete following line when resize file location is fixed
+ [ -f "$RESIZE_FN" ] || RESIZE_FN="$SAVE_MP/pupsaveresizenew.txt"
+ [ -f "$RESIZE_FN" ] && resize_ext_file
  ONE_LOOP="$(losetup -f)"
  losetup $ONE_LOOP $SAVE_FN
  SFFS='ext'$(echo -n "$SAVE_FN" | rev | cut -c 3)
- [ "$PFSCK" = "yes" ] && fsck_ext "$ONE_LOOP" "$SFFS"
+ [ "$PFSCK" = "yes" ] && { echo "" > /dev/console; fsck_ext "$ONE_LOOP" "$SFFS"; }
+ [ "$SAVE_SZ_FN" ] && resize_ext_fs "$ONE_LOOP" "$SFFS"
  [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
  mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
  [ $? -eq 0 ] || PUPSAVE=""  
