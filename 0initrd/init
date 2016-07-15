@@ -382,6 +382,76 @@ copy_folders() {
  [ -d "$DESTDIR" ] || mkdir -p $DESTDIR
  ln -s $DESTDIR $SAVE_LAYER
  BKFOLDERS="$(ls -1 -r $SAVE_MP | grep '^20[0-9][0-9]')"
+ BKLASTFOLDER="$(echo "$BKFOLDERS" | head -n 1)"
+ #a boot option allows ignore last n sessions, also need to create a badlist...
+ if [ "$PIGNORELAST" ];then
+  BKBADLIST="$(echo "$BKFOLDERS" | head -n ${PIGNORELAST})"
+  if [ -f $SAVE_MP/$BKLASTFOLDER/.badfolders ];then
+   cp $SAVE_MP/$BKLASTFOLDER/.badfolders $DESTDIR/
+   if [ $? -ne 0 ];then
+    #fallback, in case last folder badly corrupted...
+    BKPREVFOLDER="$(echo "$BKFOLDERS" | head -n 2 | tail -n 1)"
+    [ -f $SAVE_MP/$BKPREVFOLDER/.badfolders ] && cp $SAVE_MP/$BKPREVFOLDER/.badfolders $DESTDIR/
+   fi
+  fi
+  echo "$BKBADLIST" >> $DESTDIR/.badfolders
+  #note, rc.shutdown and savesession-dvd 'touch' this file so it will get saved.
+  sync
+ else
+  [ -f $SAVE_MP/$BKLASTFOLDER/.badfolders ] && cp $SAVE_MP/$BKLASTFOLDER/.badfolders $DESTDIR/
+ fi
+ [ -f $DESTDIR/.badfolders ] && BKBADLIST="$(cat $DESTDIR/.badfolders | tr "\n" " ")"
+ BKFOLDERS="$(echo -n "$BKFOLDERS" | tr "\n" " ")"
+ for ONEFOLDER in $BKFOLDERS;do
+  if [ ! "$(echo -n "$BKBADLIST" | grep "$ONEFOLDER")" = "" ];then
+   echo "Folder $ONEFOLDER marked bad." >/dev/console
+   continue #ignore bad folder.
+  fi
+  echo -n "Loading folder $ONEFOLDER from CD/DVD..." >/dev/console
+  #need to be careful not to overfill the ramdisk...
+  FREERAMDISK=$(df 2>/dev/null | grep /mnt/tmpfs | head -n 1 | tr -s " " | cut -f 4 -d " ")
+  SIZEFOLDER=$(du -k -s ${SAVE_MP}/${ONEFOLDER} | cut -f 1)
+  if [ -d ${SAVE_MP}/${ONEFOLDER}/archive ];then
+   SIZEARCHIVE=$(du -k -s ${SAVE_MP}/${ONEFOLDER}/archive | cut -f 1)
+  else
+   SIZEARCHIVE=0
+  fi
+  SIZESOURCE=$(expr $SIZEFOLDER - $SIZEARCHIVE)
+  if [ $FREERAMDISK -gt $SIZESOURCE ];then
+   #well, -u will only copy if files newer, so less stuff may get copied than calc'd above.
+   #need to copy everything except archive folder...
+   [ -d $SAVE_MP/$ONEFOLDER/bin ] && cp -a -u $SAVE_MP/$ONEFOLDER/bin $DESTDIR/   > /dev/null 2>&1
+   [ -d $SAVE_MP/$ONEFOLDER/sbin ] && cp -a -u $SAVE_MP/$ONEFOLDER/sbin $DESTDIR/   > /dev/null 2>&1
+   [ -d $SAVE_MP/$ONEFOLDER/etc ] && cp -a -u $SAVE_MP/$ONEFOLDER/etc $DESTDIR/   > /dev/null 2>&1
+   [ -d $SAVE_MP/$ONEFOLDER/lib ] && cp -a -u $SAVE_MP/$ONEFOLDER/lib $DESTDIR/   > /dev/null 2>&1
+   [ -d $SAVE_MP/$ONEFOLDER/opt ] && cp -a -u $SAVE_MP/$ONEFOLDER/opt $DESTDIR/   > /dev/null 2>&1
+   if [ -d $SAVE_MP/$ONEFOLDER/root/.var_saved ];then #100820 see /etc/rc.d/functions4puppy
+    mkdir -p $DESTDIR/var
+    cp -a -u $SAVE_MP/$ONEFOLDER/root/.var_saved/* $DESTDIR/var/ > /dev/null 2>&1
+   fi
+   [ -d $SAVE_MP/$ONEFOLDER/root ] && cp -a -u $SAVE_MP/$ONEFOLDER/root $DESTDIR/   > /dev/null 2>&1
+   [ -d $SAVE_MP/$ONEFOLDER/root/.var_saved ] && rm -rf $DESTDIR/root/.var_saved > /dev/null 2>&1 #100820
+   [ -d $SAVE_MP/$ONEFOLDER/usr ] && cp -a -u $SAVE_MP/$ONEFOLDER/usr $DESTDIR/   > /dev/null 2>&1
+   [ $DEVTMPFSFLG -eq 0 ] && [ -d $SAVE_MP/$ONEFOLDER/dev ] && cp -a -u $SAVE_MP/$ONEFOLDER/dev $DESTDIR/   > /dev/null 2>&1 #v411 130612
+   cp -a -u $SAVE_MP/$ONEFOLDER/*.sfs $DESTDIR/   > /dev/null 2>&1 #v3.97
+   #delete deleted files (.wh.filename)... 110212 screen out .wh..wh..opq
+   WHITEOUTS="$(find $DESTDIR -xdev -type f -name .wh.* | grep -v '__dir_opaque' | grep -v '.wh..wh.')" #110212
+   echo "$WHITEOUTS" |
+   while read DELWHITE;do
+    DELFILE="$(echo -n "$DELWHITE" | sed -e 's/\\.wh\\.//g')"
+    if [ -e "$DELFILE" ];then
+     rm -rf "$DELFILE"
+     rm -rf "$DELWHITE"
+    fi
+   done
+   check_status 0 #display 'done' for each folder loaded.
+  else
+   echo -n "RAM disk full, copy failed at $ONEFOLDER" >> /tmp/bootinit.log
+   check_status 1
+   break
+  fi
+ done
+ sync
 }
 
 prepend_dir() {
