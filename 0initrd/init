@@ -738,7 +738,36 @@ if [ "$SAVEPART" ];then #ensure that save partition is mounted
  ensure_save_mounted
 fi
 
-#initmodules stuff goes here
+#insmod modules needed by keyboard
+if [ "$PIMOD" != "" ];then
+ [ -d /lib/modules ] && mv -f /lib/modules /lib/modules.bak
+ ln -s /pup_new/lib/modules /lib/modules
+ [ -d /lib/firmware ] && mv -f /lib/firmware /lib/firmware.bak
+ ln -s /pup_new/lib/firmware /lib/firmware
+ MODSPATH="/lib/modules/$KERNELVER"
+ for ONEMOD in `echo -n "$PIMOD" | tr ',' ' '`;do
+  CURMOD=""
+  if [ -f "${MODSPATH}/${ONEMOD}" ];then
+   CURMOD="$ONEMOD"
+  else
+   CURMOD="`grep -m1 $ONEMOD $MODSPATH/modules.order`"
+   if [ "$CURMOD" = "" ];then
+    MODPATN="`echo -n "$ONEMOD" | tr '_' '-'`"
+    CURMOD="`grep -m1 "$MODPATN" $MODSPATH/modules.order`"
+   fi
+   [ -f "${MODSPATH}/${CURMOD}" ] || CURMOD=""
+  fi
+  if [ "$CURMOD" != "" ];then
+   echo -n "Adding module $CURMOD" > /dev/console
+   insmod "${MODSPATH}/${CURMOD}" > /dev/console 2>&1
+   check_status $?
+  fi
+ done
+ rm -f /lib/modules
+ [ -d /lib/modules.bak ] && mv /lib/modules.bak /lib/modules
+ rm -f /lib/firmware
+ [ -d /lib/firmware.bak ] && mv /lib/firmware.bak /lib/firmware
+fi
 
 #find PUPSAVE, sortout pupmode
 PUPMODE=5
