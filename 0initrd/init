@@ -662,7 +662,7 @@ if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
  [ "${PMEDIA:0:3}" != "usb" ] && search_func
  if [ "$P_PART" = "" ];then
   wait_for_usb
-  USBDRVS="$(find /sys/block -maxdepth 1 -name 'sd*' -o -name 'sr*' | xargs -l readlink 2>/dev/null | grep '/usb[0-9]' | rev | cut -f 1 -d '/' | rev | tr '\n' ' ')"
+  USBDRVS="$(find /sys/block -maxdepth 1 -name 'sd*' -o -name 'sr*' | xargs -n 1 readlink 2>/dev/null | grep '/usb[0-9]' | rev | cut -f 1 -d '/' | rev | tr '\n' ' ')"
   [ "$USBDRVS" ] && search_func "$(echo -n $USBDRVS | tr ' ' '|')"
  fi
 fi
