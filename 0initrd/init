@@ -875,7 +875,7 @@ echo "PSAVEPART='$PSAVEPART'" >> /pup_new/etc/rc.d/PUPSTATE
 echo "PSUBDIR='$PSUBDIR'" >> /pup_new/etc/rc.d/PUPSTATE #120215
 
 if [ "$PUPSAVE" ];then
- xBOOTCONFIG="`grep -v '^PREVUNIONRECORD' /pup_new/etc/rc.d/BOOTCONFIG | sed -e 's/^LASTUNIONRECORD/PREVUNIONRECORD/'`"
+ xBOOTCONFIG="$(grep -v '^PREVUNIONRECORD' /pup_new/etc/rc.d/BOOTCONFIG | sed -e 's/^LASTUNIONRECORD/PREVUNIONRECORD/')"
  echo "$xBOOTCONFIG" > /pup_new/etc/rc.d/BOOTCONFIG
  echo "LASTUNIONRECORD='$(echo -n $NEWUNIONRECORD)'" >> /pup_new/etc/rc.d/BOOTCONFIG
 else
@@ -884,11 +884,11 @@ else
 fi
 
 echo -n "Performing a 'switch_root' to the layered filesystem..." > /dev/console
-for ONEMNT in `mount | cut -f 3 -d ' ' | grep -v 'pup_new' | grep '^/pup_' | tr '\n' ' '`;do
+for ONEMNT in $(mount | cut -f 3 -d ' ' | grep -v 'pup_new' | grep '^/pup_' | tr '\n' ' ');do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
-for ONEMNT in `mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' '`;do
+for ONEMNT in $(mount | cut -f 3 -d ' ' | grep '^/mnt/' | tr '\n' ' ');do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
 done
