@@ -670,6 +670,8 @@ if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
  fi
 fi
 if [ "$PDRV" = "" ];then
+ echo -n "Finding puppy main sfs file." > /dev/console
+ [ "$ONE_TRY_FN" ] || ONE_TRY_FN="$PSUBDIR/$P_DEF_FN"
  fatal_error "$ONE_PART $ONE_TRY_FN not found."
 fi
 
