@@ -185,14 +185,7 @@ ensure_mounted() {
 
 ensure_save_mounted() {
  ensure_mounted "$SAVEPART" "$SAVE_MP"
- if [ "$ONE_MP" ];then
-  if [ "$ONE_MP" != "$SAVE_MP" ];then
-   mount -o move $ONE_MP $SAVE_MP
-   [ $? -eq 0 ] || SAVE_MP=""
-  fi
- else
-  SAVE_MP=""
- fi
+ SAVE_MP="$ONE_MP"
  [ "$SAVE_MP" ] && SAVE_FS="$ONE_FS"
 }
 
