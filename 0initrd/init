@@ -931,6 +931,8 @@ else
 fi
 
 echo -n "Performing a 'switch_root' to the layered filesystem..." > /dev/console
+
+rm -r -f "/pup_new/initrd${SAVE_LAYER}"
 for ONEMNT in $(mount | cut -f 3 -d ' ' | grep -v 'pup_new' | grep '^/pup_' | tr '\n' ' ');do
  mkdir -p /pup_new/initrd${ONEMNT}
  mount -o move $ONEMNT /pup_new/initrd${ONEMNT}
@@ -942,7 +944,6 @@ done
 
 if [ "$PUPSAVE" ];then
  if [ "$SAVE_LAYER" -a -L "$SAVE_LAYER" ];then
-  rm -r -f "/pup_new/initrd${SAVE_LAYER}"
   ln -s "/initrd${SAVE_FN}" "/pup_new/initrd${SAVE_LAYER}" #for after switch
  fi
 fi
