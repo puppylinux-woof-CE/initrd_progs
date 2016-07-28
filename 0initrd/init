@@ -675,6 +675,29 @@ if [ "$PDRV" = "" ];then
  fatal_error "$ONE_PART $ONE_TRY_FN not found." "Finding puppy main sfs file."
 fi
 
+#establish SAVEPART
+decode_other_ids
+if [ "$Z_BP_ID" -o "$F_BP_ID" -o "$A_BP_ID" -o "$Y_BP_ID" -o "$SAVE_BP_ID" ];then
+ wait_for_usb
+ decode_other_ids
+fi
+if [ "$P_PART" ];then
+ BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
+ if [ "$SAVEPART" = "" ];then #setup SAVEPART
+  [ "$P_MP" ] || P_MP="$(mount | grep -m1 "/dev/$P_PART " | cut -f 3 -d ' ')"
+  [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
+  [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
+  [ "$SAVEPART" ] || SAVEPART="$P_PART"
+ fi
+fi
+#ensure SAVEPART is mounted on /mnt/dev_save
+SAVE_MP="/mnt/dev_save"
+if [ "$SAVEPART" -a "$SAVEPART" = "$P_PART" ];then
+ #this mount move needs to be done before loading any sfs's
+ [ -d "$SAVE_MP" ] || mkdir -p $SAVE_MP
+ [ "$P_MP" ] && { mount -o move $P_MP $SAVE_MP; P_MP="$SAVE_MP"; } 
+fi
+
 #have pup...sfs, now try to load it
 RAMSIZE=$(free | grep -o 'Mem: .*' | tr -s ' ' | cut -f 2 -d ' ') #total physical ram (less shared video). 110405
 
@@ -707,12 +730,6 @@ if [ $STATUS -gt 0 ];then
 fi
 PUP_LAYER="$SFS_MP"
 
-#have basic system, now try to add optional stuff
-decode_other_ids
-if [ "$Z_BP_ID" -o "$F_BP_ID" -o "$A_BP_ID" -o "$Y_BP_ID" -o "$SAVE_BP_ID" ];then
- wait_for_usb
- decode_other_ids
-fi
 #all partition id's should be decoded by now
 [ "$Z_BP_ID" ] && log_part_id "$Z_BP_ID"
 [ "$F_BP_ID" ] && log_part_id "$F_BP_ID"
@@ -720,6 +737,7 @@ fi
 [ "$Y_BP_ID" ] && log_part_id "$Y_BP_ID"
 [ "$SAVE_BP_ID" ] && log_part_id "$SAVE_BP_ID"
 
+#have basic system, now try to add optional stuff
 find_onepupdrv "$F_PART" "$F_BP_FN" "$F_DEF_FN" "f"
 [ "$ONE_FN" ] && FDRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$FDRV" ] && { LOADMSG="fdrv"; setup_onepupdrv "$FDRV" "f"; }
@@ -735,21 +753,6 @@ find_onepupdrv "$Y_PART" "$Y_BP_FN" "$Y_DEF_FN" "y"
 find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
 [ "$ONE_FN" ] && ADRV="$ONE_PART,$ONE_FS,$ONE_FN"
 [ "$ADRV" ] && { LOADMSG="adrv"; setup_onepupdrv "$ADRV" "a" "p"; }
-
-if [ "$P_PART" ];then
- BOOTDRV="$(echo -n "$P_PART" | grep -o -f /tmp/ALLDRVS0)" #110205 ex: sda1 becomes sda.
- if [ "$SAVEPART" = "" ];then #setup SAVEPART
-  [ "$P_MP" ] || P_MP="$(mount | grep -m1 "/dev/$P_PART " | cut -f 3 -d ' ')"
-  [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
-  [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
-  [ "$SAVEPART" ] || SAVEPART="$P_PART"
- fi
-fi
-
-if [ "$SAVEPART" ];then #ensure that save partition is mounted
- SAVE_MP="/mnt/dev_save"
- ensure_save_mounted
-fi
 
 #insmod modules needed by keyboard
 if [ "$PIMOD" != "" ];then
@@ -781,6 +784,9 @@ if [ "$PIMOD" != "" ];then
  rm -f /lib/firmware
  [ -d /lib/firmware.bak ] && mv /lib/firmware.bak /lib/firmware
 fi
+
+#ensure that save partition is mounted
+[ "$SAVEPART" ] && ensure_save_mounted
 
 #find PUPSAVE, sortout pupmode
 PUPMODE=5
