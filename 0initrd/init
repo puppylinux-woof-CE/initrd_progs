@@ -559,8 +559,10 @@ umount_unneeded() {
 
 fatal_error() {
 # "$1" - message - ex: puppy_tahr_6.0.5.sfs not found
+# "$2" - pre-status-message - ex: Finding puppy
  KEEPMOUNTED=""
  umount_unneeded
+ [ "${2}" ] && echo -n "${2}" > /dev/console
  check_status -critical 1 "$1"
 }
 
@@ -669,9 +671,8 @@ if [ "$LOOK_PUP" -o "$LOOK_SAVE" ];then #something to search for
 fi
 [ "$P_BP_ID" ] && { log_part_id "$P_BP_ID"; ONE_PART="$P_BP_ID"; }
 if [ "$PDRV" = "" ];then
- echo -n "Finding puppy main sfs file." > /dev/console
  [ "$ONE_TRY_FN" ] || ONE_TRY_FN="$PSUBDIR/$P_DEF_FN"
- fatal_error "$ONE_PART $ONE_TRY_FN not found."
+ fatal_error "$ONE_PART $ONE_TRY_FN not found." "Finding puppy main sfs file."
 fi
 
 #have pup...sfs, now try to load it
@@ -690,17 +691,18 @@ LOADMSG="main"
 setup_onepupdrv "$PDRV" "p"
 STATUS=$?
 if [ $STATUS -gt 0 ];then
+ P_PRE_MSG="Loading puppy main sfs file."
  case $STATUS in
   1)
-   fatal_error "$PDRV information is incomplete." ;;
+   fatal_error "$PDRV information is incomplete." "$P_PRE_MSG" ;;
   2)
-   fatal_error "$ONE_PART is not mounted." ;;
+   fatal_error "$ONE_PART is not mounted." "$P_PRE_MSG" ;;
   3)
-   fatal_error "$ONE_PART $ONE_REL_FN is not Ok." ;;
+   fatal_error "$ONE_PART $ONE_REL_FN is not Ok." "$P_PRE_MSG" ;;
   4)
-   fatal_error "$ONE_PART $ONE_REL_FN mount of sfs failed." ;;
+   fatal_error "$ONE_PART $ONE_REL_FN mount of sfs failed." "$P_PRE_MSG" ;;
   5)
-   fatal_error "aufs mount of $ONE_LAYER failed." ;;
+   fatal_error "aufs mount of $ONE_LAYER failed." "$P_PRE_MSG" ;;
  esac
 fi
 PUP_LAYER="$SFS_MP"
