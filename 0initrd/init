@@ -263,7 +263,7 @@ load_sfs_file() {
  [ -d "$SFS_MP" ] || mkdir $SFS_MP
  mount -r -t squashfs -o noatime $ONE_LOOP $SFS_MP > /dev/console 2>&1
  STATUS=$?
- [ $STATUS -eq 0 ] && ONE_LAYER="$SFS_MP=ro"
+ [ $STATUS -eq 0 ] && ONE_LAYER="$SFS_MP=rr"
  [ "$LOADMSG" ] && check_status $STATUS
 }
 
