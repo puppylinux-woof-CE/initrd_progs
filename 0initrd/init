@@ -222,6 +222,13 @@ find_onepupdrv() {
  [ "$ONE_FN" = "" -a "${2}" ] && echo "$ONE_PART, $ONE_TRY_FN file not found." >> /tmp/bootinit.log
 }
 
+setup_loop_sfs() {
+# "$1" - sfs filename - ex: /mnt/dev_save/puppy/tahr/puppy_tahr_6.0.5.sfs
+ ONE_LOOP="$(losetup -f)"
+ losetup $LO_OPT $ONE_LOOP ${1}
+ [ $? -eq 0 ] || { LO_OPT=""; losetup $LO_OPT $ONE_LOOP ${1}; }
+}
+
 load_sfs_file() {
  [ "$LOADMSG" ] && echo -n "Loading the '${ONE_BASENAME}' ${LOADMSG} file..." > /dev/console
  if [ "$COPY2RAM" = "" ];then
@@ -237,7 +244,6 @@ load_sfs_file() {
   [ "$PRAMONLY" = "yes" ] && COPYCONTENDER='yes'
   [ "$COPYCONTENDER" = "yes" ] && [ $RAMSIZE -gt 400000 ] && [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
  fi
- ONE_LOOP="$(losetup -f)"
  if [ "$COPY2RAM" = "yes" ];then
   SIZEZK=$(du -k $ONE_FN | cut -f 1)
   TFREEK=$(df | grep -m1 ' /mnt/tmpfs' | tr -s ' ' | cut -f 4 -d ' ')
@@ -249,13 +255,13 @@ load_sfs_file() {
     cp -af $ONE_FN /mnt/tmpfs/
    fi
    sync
-   losetup $ONE_LOOP /mnt/tmpfs/$ONE_BASENAME
+   setup_loop_sfs /mnt/tmpfs/$ONE_BASENAME
   else
-   losetup $ONE_LOOP $ONE_FN
+   setup_loop_sfs $ONE_FN
    [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
   fi
  else
-  losetup $ONE_LOOP $ONE_FN
+  setup_loop_sfs $ONE_FN
   [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
  fi
  SFS_MP="/pup_${ONE_SFX}"
@@ -642,6 +648,7 @@ PUPSAVES=""
 KEEPMOUNTED=""
 FSCKDPARTS=""
 BLKIDOUT=""
+LO_OPT="-r"
 
 #establish PDRV
 P_PART=""; LOOK_PUP=""; LOOK_SAVE=""
