@@ -1,3 +1,7 @@
+the end
+=======
+the project has been moved to https://github.com/puppylinux-woof-CE/woof-CE
+
 initrd_progs
 ============
 
