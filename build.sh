@@ -1,4 +1,6 @@
 #!/bin/bash
+#also see:
+#  http://autobuild.buildroot.org/toolchains/tarballs/
 
 . ./build.conf
 export MKFLG
@@ -11,10 +13,20 @@ DEFAULT_x86=i686
 DEFAULT_ARM=armv6l
 #DEFAULT_ARM64=aarch64
 
-PREBUILT_BINARIES="http://01micko.com/initrd_tarballs/initrd_progs-20160630-static.tar.xz"
+PREBUILT_BINARIES="http://01micko.com/wdlkmpx/woof-CE/initrd_progs-20170322-static.tar.xz"
 
 ARCH=`uname -m`
 OS_ARCH=$ARCH
+
+function get_initrd_progs() {
+	local var=INITRD_PROGS
+	[ "$1" = "-pkg" ] && { var=PACKAGES ; shift ; }
+	local arch=$1
+	[ "$arch" = "" ] && arch=`uname -m`
+	case "$arch" in i?86) arch="x86" ;; esac
+	case "$arch" in arm*) arch='arm' ;; esac
+	eval echo \$$var \$${var}_${arch} #ex: $PACKAGES $PACKAGES_x86, $INITRD_PROGS $INITRD_PROGS_x86
+}
 
 case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 	echo "If you made changes then don't forget to remove all 00_* directories first"
@@ -23,7 +35,7 @@ case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 	pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
 	echo -e "\n\n\n*** Creating $pkgx"
 	while read ARCH ; do
-		for PROG in ${INITRD_PROGS} ; do
+		for PROG in $(get_initrd_progs ${ARCH#00_}) ; do
 			case $PROG in ""|'#'*) continue ;; esac
 			progs2tar+=" ${ARCH}/bin/${PROG}"
 		done
@@ -39,6 +51,8 @@ case "$1" in w|w_apps|c)
 esac
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+function fatal_error() { echo -e "$@" ; exit 1 ; }
 
 help_msg() {
 	echo "Build static apps in the queue defined in build.conf
@@ -76,7 +90,6 @@ USE_SYS_GCC=no
 CROSS_COMPILE=no
 FORCE_BUILD_ALL=no
 export DLD_ONLY=no
-ASK_KEYMAP=no
 INITRD_CREATE=yes
 case ${INITRD_COMP} in
 	gz|xz) ok=yes ;;
@@ -92,20 +105,19 @@ while [ "$1" ] ; do
 	-gz|-xz|gz|xz) INITRD_COMP=${1#-}  ; shift ;;
 		-download) DLD_ONLY=yes        ; shift ;;
 		-prebuilt) USE_PREBUILT=yes    ; shift ;;
-		-ask_keymap) ASK_KEYMAP=yes    ; shift ;; #for 3builddistro
 		-nord)     INITRD_CREATE=no    ; shift ;;
 		-auto)     PROMPT=no           ; shift ;;
 		-v)        V=-v                ; shift ;;
 		-lang)     LOCALE="$2"         ; shift 2
-			       [ "$LOCALE" = "" ] && { echo "$0 -locale: No locale specified" ; exit 1; } ;;
+			       [ "$LOCALE" = "" ] && fatal_error "$0 -locale: No locale specified" ;;
 		-keymap)   KEYMAP="$2"         ; shift 2
-			       [ "$KEYMAP" = "" ] && { echo "$0 -locale: No keymap specified" ; exit 1; } ;;
+			       [ "$KEYMAP" = "" ] && fatal_error "$0 -locale: No keymap specified" ;;
 		-pkg)      BUILD_PKG="$2"      ; shift 2
-			       [ "$BUILD_PKG" = "" ] && { echo "$0 -pkg: Specify a pkg to compile" ; exit 1; } ;;
+			       [ "$BUILD_PKG" = "" ] && fatal_error "$0 -pkg: Specify a pkg to compile" ;;
 		-arch)     TARGET_ARCH="$2"    ; shift 2
-			       [ "$TARGET_ARCH" = "" ] && { echo "$0 -arch: Specify a target arch" ; exit 1; } ;;
+			       [ "$TARGET_ARCH" = "" ] && fatal_error "$0 -arch: Specify a target arch" ;;
 		-specs)    DISTRO_SPECS="$2"   ; shift 2
-			       [ ! -f "$DISTRO_SPECS" ] && { echo "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ; exit 1; } ;;
+			       [ ! -f "$DISTRO_SPECS" ] && fatal_error "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ;;
 	-h|-help|--help) help_msg ; exit ;;
 		-clean)
 			echo -e "Press P and hit enter to proceed, any other combination to cancel.." ; read zz
@@ -140,10 +152,7 @@ function use_prebuilt_binaries() {
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 function set_compiler() {
-	if ! which make &>/dev/null ; then
-		echo "It looks like development tools are not installed.. stopping"
-		exit 1
-	fi
+	which make &>/dev/null || fatal_error echo "It looks like development tools are not installed.. stopping"
 	if [ "$USE_SYS_GCC" = "no" -a "$CROSS_COMPILE" = "no" ] ; then
 		# the cross compilers from landley.net were compiled on x86
 		# if we're using the script in a non-x86 system
@@ -155,7 +164,7 @@ function set_compiler() {
 		esac
 	fi
 	if [ "$USE_SYS_GCC" = "yes" ] ; then
-		which gcc &>/dev/null || { echo "No gcc, aborting..." ; exit 1 ; }
+		which gcc &>/dev/null || fatal_error "No gcc, aborting..."
 		echo -e "\nBuilding in: $ARCH"
 		echo -e "\n* Using system gcc\n"
 		sleep 1.5
@@ -164,15 +173,7 @@ function set_compiler() {
 		CROSS_COMPILE=yes #precaution
 		case $ARCH in
 			i?86|x86_64) ok=yes ;;
-			*)
-				echo -e "*** The cross-compilers from aboriginal linux"
-				echo -e "*** work in x86 systems only, I guess."
-				echo -e "* Run $0 -sysgcc to use the system gcc ... \n"
-				if [ "$PROMPT" = "yes" ] ; then
-					echo -n "Press CTRL-C to cancel, enter to continue..." ; read zzz
-				else
-					exit 1
-				fi
+			*)	fatal_error "*** Only use x86 systems to cross-compile\n* Run $0 -sysgcc to use the system gcc ... \n" ;;
 		esac
 	fi
 }
@@ -188,7 +189,6 @@ function select_target_arch() {
 		arm) TARGET_ARCH=${DEFAULT_ARM} ;;
 		#arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
 	esac
-	#--
 	VALID_TARGET_ARCH=no
 	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
 		for a in $ARCH_LIST_EX ; do
@@ -217,27 +217,22 @@ function select_target_arch() {
 		echo -en "\nEnter your choice: " ; read choice
 		echo
 		x=1
-		for a in $ARCH_LIST_EX ; do
-			[ "$x" = "$choice" ] && selected_arch=$a && break
-			let x++
-		done
+		for a in $ARCH_LIST ; do [ "$x" = "$choice" ] && selected_arch=$a && break ; let x++ ; done
+		for a in $ARCH_LIST_EX ; do [ "$a" = "$choice" ] && selected_arch=$a ; done
 		case $selected_arch in
 			default|"")ok=yes ;;
 			*) ARCH=$selected_arch ;;
 		esac
 	fi
-	#--
+	# using prebuilt binaries: echo $ARCH and return
 	[ "$USE_PREBUILT" = "yes" ] && echo "Arch: $ARCH" && return
-	case $OS_ARCH in
-		*64) ok=yes ;;
-		*)
-			case $ARCH in *64)
-				echo -e "\n*** Trying to compile for a 64bit arch in a 32bit system?"
-				echo -e "*** That's not possible.. exiting.."
-				exit 1
-			esac
-			;;
-	esac
+	# don't check OS_ARCH if only downloading
+	if [ "$DLD_ONLY" = "no" ] ; then
+		case $OS_ARCH in
+			*64) ok=yes ;;
+			*) case $ARCH in *64) fatal_error "\n*** Trying to compile for a 64bit arch in a 32bit system?\n*** That's not possible.. exiting.." ;; esac ;;
+		esac
+	fi
 	echo "Arch: $ARCH"
 	sleep 1.5
 }
@@ -293,9 +288,9 @@ function check_bin() {
 		coreutils_static) static_bins='cp' ;;
 		dosfstools_static) static_bins='fsck.fat' ;;
 		e2fsprogs_static) static_bins='e2fsck resize2fs' ;;
+		exfat-utils_static) static_bins='exfatfsck' ;;
+		fuse-exfat_static) static_bins='mount.exfat-fuse' ;;
 		findutils_static) static_bins='find' ;;
-		fuse_static) static_bins='fusermount' ;;
-		module-init-tools_static) static_bins='lsmod modprobe' ;;
 		util-linux_static) static_bins='losetup' ;;
 		util-linux-222_static) static_bins='losetup-222' ;;
 		*) static_bins=${init_pkg%_*} ;;
@@ -317,10 +312,12 @@ function build_pkgs() {
 	[ "$BUILD_PKG" != "" ] && PACKAGES="$BUILD_PKG"
 	if [ "$FORCE_BUILD_ALL" = "yes" ] ; then
 		PACKAGES=$(find pkg -maxdepth 1 -type d -name '*_static' | sed 's|.*/||' | sort)
+	else
+		PACKAGES=$(get_initrd_progs -pkg $ARCH)
 	fi
-	PACKAGES=$(echo "$PACKAGES" | grep -Ev '^#|^$')
 	#--
 	for init_pkg in ${PACKAGES} ; do
+		case $init_pkg in ""|'#'*) continue ;; esac
 		[ -f .fatal ] && { echo "Exiting.." ; rm -f .fatal ; exit 1 ; }
 		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
 		if [ "$DLD_ONLY" = "no" ] ; then
@@ -335,7 +332,7 @@ function build_pkgs() {
 		mkdir -p ${MWD}/00_${ARCH}/log
 		sh ${init_pkg}.petbuild 2>&1 | tee ${MWD}/00_${ARCH}/log/${init_pkg}build.log
 		cd ${MWD}
-		[ "$DLD_ONLY" = "no" ] && continue
+		[ "$DLD_ONLY" = "yes" ] && continue
 		check_bin $init_pkg
 		[ $? -ne 0 ] && { echo "target binary does not exist..."; exit 1; }
 	done
@@ -345,27 +342,15 @@ function build_pkgs() {
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 function set_lang() { #in $MWD
-	if [ "$LOCALE" = "" ] ; then
-		[ "$PROMPT" = "no" ] && return
-		echo -e "\n -- Language (locale) --"
-		echo -en "Type a valid lang (ko_KR, ja_JP, etc): " ; read LOCALE
-		[ ! "$LOCALE" ] && echo -e "\n* Using default locale\n" && return
-	fi
+	[ "${LOCALE%_*}" = "en" ] && LOCALE=""
+	[ ! "$LOCALE" ] && { echo -e "\n* Using default locale" ; rm -f ZZ_initrd-expanded/PUPPYLANG ; return; }
 	echo -e "* LANG set to: $LOCALE\n"
 	echo -n "$LOCALE" > ZZ_initrd-expanded/PUPPYLANG
 }
 
 function set_keymap() { #in $MWD
-	if [ "$KEYMAP" = "" -o "$ASK_KEYMAP" = "yes" ] ; then
-		[ "$PROMPT" = "no" -a "$ASK_KEYMAP" = "no" ] && return
-		echo -e "-- Keyboard layout  --"
-		echo -e "Type one of the following keymaps (leave empty for default keymap): \n"
-		echo $(ls 0initrd/lib/keymaps | sed 's|\..*||')
-		echo -en "\nKeymap: " ; read KEYMAP
-	fi
 	[ ! -f 0initrd/lib/keymaps/${KEYMAP}.gz ] && KEYMAP=""
-	case $KEYMAP in default|en|us|"") echo "*** Using default keymap" && return ;; esac
-	sleep 0.5
+	case $KEYMAP in default|en|us|"") echo "* Using default keymap"; rm -f ZZ_initrd-expanded/PUPPYKEYMAP ; return ;; esac
 	echo -e "* Keymap set to: '${KEYMAP}'"
 	echo -n "$KEYMAP" > ZZ_initrd-expanded/PUPPYKEYMAP
 }
@@ -392,9 +377,8 @@ function generate_initrd() {
 	set_keymap  #
 
 	cd ZZ_initrd-expanded
-	[ -f dev.tar.gz ] && tar -zxf dev.tar.gz && rm -f dev.tar.gz
 
-	for PROG in ${INITRD_PROGS} ; do
+	for PROG in $(get_initrd_progs ${ARCH}) ; do
 		case $PROG in ""|'#'*) continue ;; esac
 		if [ -f ../00_${ARCH}/bin/${PROG} ] ; then
 			file ../00_${ARCH}/bin/${PROG} | grep -E 'dynamically|shared' && exit 1
@@ -404,6 +388,8 @@ function generate_initrd() {
 			exit 1
 		fi
 	done
+
+	[ ! -f bin/nano ] && rm -rf usr lib/terminfo
 
 	echo
 	if [ ! -f "$DISTRO_SPECS" -a -f ../DISTRO_SPECS ] ; then
