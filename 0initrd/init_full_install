@@ -42,6 +42,8 @@ else
   echo '3' > /proc/sys/kernel/printk
 fi
 
+case $(uname -m) in arm*) ARM_SYSTEM=yes ;; esac
+
 #=============================================================
 #                        FUNCTIONS
 #=============================================================
@@ -253,8 +255,10 @@ if [ "$pfix" ];then
  done
 fi
 
-[ "$TZ" ] && export TZ
-hwclock -l -s
+if [ "$ARM_SYSTEM" != "yes" ] ; then
+	[ "$TZ" ] && export TZ
+	hwclock -l -s
+fi
 
 #-----------------------------
 # see if actually a non-huge kernel is being used..
