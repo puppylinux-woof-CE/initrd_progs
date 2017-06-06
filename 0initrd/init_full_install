@@ -229,17 +229,7 @@ fatal_error() {
 
 clear #clear the screen.
 
-echo -en "\\033[0;34m***\\033[0;37m ${DISTRO_NAME} ${DISTRO_VERSION}"
-echo -en "\\033[0;34m -\\033[0;37m Linux ${KERNELVER} "
-echo -en "\\033[0;31m[\\033[0;37m`uname -m`\\033[0;31m]"
-echo -e "\\033[0;34m ***\\033[0;39m"
-
 [ ! "$LOGLEVEL" ] && exec 1>/tmp/bootinit.log 2>&1 #remove o/p from console. v2.22 loglevel added.
-
-# sets PLANG, PKEYS, VFAT_OUT_PARAM, FONTMAP, KMAP, CODEPAGE
-[ -f /sbin/set_plang ] && . /sbin/set_plang
-
-echo -n "Starting system..." >/dev/console
 
 [ $pdrv ] && PDRV=$pdrv   #boot parameter, partition have booted off. ex: hda3
 [ $pdev1 ] && PDRV=$pdev1 #boot parameter, partition have booted off. ex: hda3
@@ -288,7 +278,7 @@ case $PDRV in
   */*) PDRV=$(basename $PDRV) ;;
 esac
 BLKIDOUT=""
-decode_id $PDRV #decode UUID
+decode_id $PDRV #decode UUID, LABEL
 PDRV=$ONE_PART
 
 # PDRV must be a linux fs
@@ -300,6 +290,24 @@ esac
 
 # mount PDRV
 ensure_mounted $PDRV /pup_new || fatal_error "Could not mount $PDRV ..."
+
+#-----------------------------------------
+
+if [ -f /pup_new/etc/DISTRO_SPECS ] ; then
+	. /pup_new/etc/DISTRO_SPECS
+fi
+
+echo -en "\\033[0;34m***\\033[0;37m ${DISTRO_NAME} ${DISTRO_VERSION}" > /dev/null
+echo -en "\\033[0;34m -\\033[0;37m Linux ${KERNELVER} " > /dev/null
+echo -en "\\033[0;31m[\\033[0;37m`uname -m`\\033[0;31m]" > /dev/null
+echo -e "\\033[0;34m ***\\033[0;39m" > /dev/null
+
+# sets PLANG, PKEYS, VFAT_OUT_PARAM, FONTMAP, KMAP, CODEPAGE
+[ -f /sbin/set_plang ] && . /sbin/set_plang
+
+#echo -n "Starting system..." >/dev/console
+
+#-----------------------------------------
 
 # is it a valid full install?
 if [ -d /pup_new/initrd ] ; then
