@@ -18,7 +18,6 @@ L_WAITING_FOR_USB="Waiting for USB storage."
 L_LOADING_KEYBOARD_LAYOUT="Loading '%s' keyboard layout..." #printf
 L_DROPPED_TO_INITRD_SHELL="Dropped to initramfs shell. Type 'exec switch' to continue booting Puppy."
 L_ADDING_MODULE="Adding module %s" #printf
-L_NO_DISTRO_SPECS="No DISTRO_SPECS file found, assuming that personal storage is empty."
 L_DEBUG_SAVE="To save debug info to a partition, type 'debugsave'"
 ##############################################################
 
@@ -113,56 +112,57 @@ mnt_func() {
 	return $?
 }
 
-check_status() #args: [-critical] $RET_VAL "$ERROR_MSG"
-{
-  ERROR_CRITICAL=""
-  [ "$1" = "-critical" ] && { ERROR_CRITICAL="yes" ; shift; }
-  RET_VAL=$1
-  shift
-  ERROR_MSG="$@"
-  if [ $RET_VAL -eq 0 ] ; then
-    echo -en "\\033[74G" >/dev/console #move to column 72. 110426: 74
-    echo -e "\\033[1;32m${L_DONE}\\033[0;39m" >/dev/console #32=green
-  else
-    echo -en "\\033[72G" >/dev/console #move to column 72.
-    echo -e "\\033[1;31m${L_FAILED}\\033[0;39m" >/dev/console #31=red
-    echo -e "\\033[1;35m${L_DUMPING_BOOTINIT_LOG}\\033[0;39m" >/dev/console #35=purple
-    echo -en "\\033[1;31m" >/dev/console #31=red
-    cat /tmp/bootinit.log | tail -n 4 >/dev/console
-    echo -en "\\033[0;39m" >/dev/console
-    echo -e "\\033[1;35m${L_DUMPING_KERNEL_LOG}\\033[0;39m" >/dev/console #35=purple
-    echo -en "\\033[1;31m" >/dev/console #31=red
-    dmesg | tail -n 4 >/dev/console
-    echo -en "\\033[0;39m" >/dev/console
-    #exit to initial ramdisk shell...
-    [ "$RDSH" != "" ] && exec /bin/sh >/dev/console 2>&1
-    if [ "$ERROR_CRITICAL" = "yes" ] ; then
-      echo -en "\\033[1;35m" >/dev/console #35=purple
-      if [ "$ERROR_MSG" != "" ] ; then
-        echo "*** $ERROR_MSG" >/dev/console
-        echo "*** $ERROR_MSG" #debug
-      fi
-      echo "*** ${L_ERROR_IS_TOO_CRITICAL}" #debug
-      echo "*** ${L_ERROR_IS_TOO_CRITICAL}" >/dev/console
-      echo -en "\\033[0;39m" >/dev/console
-      echo -e "\\033[1;32m*** $L_DEBUG_SAVE\\033[0;39m" >/dev/console
-      exec /bin/sh >/dev/console 2>&1
-    else
-      echo "${L_PAUSING_60_SECONDS}" >/dev/console
-      sleep 60
-    fi
-  fi
+display_msg() {
+	# "$1" - message - ex: "Something failed"
+	[ "$1" ] || return
+	echo $2 "$1" > /dev/console
+	echo "$1"
+}
+
+check_status() {
+	# "$1" - status value - ex: 0"
+	[ "$1" ] || return
+	if [ $1 -eq 0 ] ;then
+		echo -en "\\033[74G" >/dev/console #move to column 72. 110426: 74
+		echo -e "\\033[1;32m${L_DONE}\\033[0;39m" >/dev/console #32=green
+	else
+		echo -en "\\033[72G" >/dev/console #move to column 72.
+		echo -e "\\033[1;31m${L_FAILED}\\033[0;39m" >/dev/console #31=red
+		#dump_init_log #extra
+	fi
+}
+
+dump_init_log() {
+	echo -e "\\033[1;35m${L_DUMPING_BOOTINIT_LOG}\\033[0;39m" >/dev/console #35=purple
+	echo -en "\\033[1;31m" >/dev/console #31=red
+	cat /tmp/bootinit.log | tail -n 4 >/dev/console
+	echo -en "\\033[0;39m" >/dev/console
+	echo -e "\\033[1;35m${L_DUMPING_KERNEL_LOG}\\033[0;39m" >/dev/console #35=purple
+	echo -en "\\033[1;31m" >/dev/console #31=red
+	dmesg | tail -n 4 >/dev/console
+	echo -en "\\033[0;39m" >/dev/console
+}
+
+fatal_error() {
+	# "$1" - message - ex: "Something failed"
+	#KEEPMOUNTED=""
+	#umount_unneeded
+	echo -en "\\033[1;35m" >/dev/console #35=purple
+	display_msg "*** $1"
+	echo "*** ${L_ERROR_IS_TOO_CRITICAL}" >/dev/console
+	echo -en "\\033[0;39m" >/dev/console
+	echo -e "\\033[1;32m*** $L_DEBUG_SAVE\\033[0;39m" >/dev/console #added
+	exec /bin/sh >/dev/console 2>&1
 }
 
 decode_id() {
- ONE_PART=""
- [ "${1}" ] || return
- if [ "$(echo -n ${1} | grep -E '^[a-z]+[0-9]')" -a "$(grep -m1 " ${1}$" /proc/partitions)" ];then
-  ONE_PART="$1"  #is a real partition
- else
-  [ "$BLKIDOUT" ] || BLKIDOUT="$(blkid)"
-  ONE_PART="$(echo "$BLKIDOUT" | grep -m1 -E " LABEL=.${1}| UUID=.${1}" | cut -f1 -d: | cut -f3 -d/)" #is LABEL or UUID
- fi
+	[ "${1}" ] || return
+	if [ "$(echo -n ${1} | grep -E '^[a-z]+[0-9]')" -a "$(grep -m1 " ${1}$" /proc/partitions)" ];then
+		echo "$1"  #is a real partition
+	else
+		[ "$BLKIDOUT" ] || BLKIDOUT="$(blkid)"
+		echo "$(echo "$BLKIDOUT" | grep -m1 -E " LABEL=.${1}| UUID=.${1}" | cut -f1 -d: | cut -f3 -d/)" #is LABEL or UUID
+	fi
 }
 
 ensure_mounted() {
@@ -222,13 +222,6 @@ wait_for_usb() {
  check_status 0
 }
 
-fatal_error() {
-# "$1" - message - ex: puppy_tahr_6.0.5.sfs not found
-# "$2" - pre-status-message - ex: Finding puppy
- [ "${2}" ] && echo -n "${2}" > /dev/console
- check_status -critical 1 "$1"
-}
-
 #=============================================================
 #                           MAIN
 #=============================================================
@@ -286,8 +279,11 @@ case $PDRV in
   */*) PDRV=$(basename $PDRV) ;;
 esac
 BLKIDOUT=""
-decode_id $PDRV #decode UUID, LABEL
-PDRV=$ONE_PART
+PDRV=$(decode_id $PDRV) #decode UUID, LABEL
+
+# if trapped in the initrd, you can specify the correct PDRV
+# ex: echo sda3 > /tmp/override_pdrv
+[ -f /tmp/override_pdrv ] && PDRV="$(cat /tmp/override_pdrv)"
 
 # PDRV must be a linux fs
 FSTYPE="$(blkid /dev/$PDRV | grep -o ' TYPE=.*' | cut -f 2 -d '"')"
@@ -313,20 +309,17 @@ echo -e "\\033[0;34m ***\\033[0;39m" > /dev/console
 # sets PLANG, PKEYS, VFAT_OUT_PARAM, FONTMAP, KMAP, CODEPAGE
 [ -f /sbin/set_plang ] && . /sbin/set_plang
 
-#echo -n "Starting system..." >/dev/console
-
 #-----------------------------------------
 
 # is it a valid full install?
 if [ -d /pup_new/initrd ] ; then
   fatal_error "Found /initrd dir. Refusing to continue. Delete that directory if it's an actual full install.."
 fi
-for i in etc/DISTRO_SPECS etc/rc.d/PUPSTATE
-do
-  [ -e /pup_new/${i} ] || fatal_error "File /$i is missing and it must already be in $PDRV"
+for i in etc/DISTRO_SPECS etc/rc.d/PUPSTATE ; do
+  [ -e /pup_new/${i} ] || fatal_error "File [${PDRV}]/${i} is missing"
 done
 if ! grep -q 'PUPMODE=2' /pup_new/etc/rc.d/PUPSTATE ; then
-  fatal_error "File /$i is missing and it must already be there"
+  fatal_error "The system in ${PDRV} doesn't look like a full-install OS"
 fi
 
 [ "$DEV1FS" ] || DEV1FS=$FSTYPE
@@ -359,7 +352,7 @@ echo -------------------- # debug
 dmesg > /tmp/dmesg.txt
 mkdir -p /pup_new/var/initrd/tmp
 cp -af /tmp/* /pup_new/var/initrd/tmp #keep any log files.
-cp -af /init /pup_new/var/initrd
+cp -af /init* /pup_new/var/initrd
 cp -af /sbin/* /pup_new/var/initrd
 
 [ -f /sbin/set_plang ] && plang_copy_to_newroot #$LANG, /etc/keymap|fontmap|codepage
