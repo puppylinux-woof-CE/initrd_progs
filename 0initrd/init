@@ -1317,7 +1317,17 @@ if [ "$PUPSAVE" ];then #refine pupmode
  #   we must check if it's located in a flash storage device
  #   in order to change the $SAVE_LAYER to /pup_ro1
  PUPSAVE_DRV=$(echo $PUPSAVE | cut -f1 -d ',')
- PUPSAVE_DRV=${PUPSAVE_DRV:0:3} #sda1 -> sda TODO: needs a proper fix
+ if [ ! -d "/sys/block/$PUPSAVE_DRV" ];then #not device e.g. sr0, assume partition
+  #remove upto 3 trailing digits
+  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
+  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
+  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
+  #remove any trailing 'p'
+  [ "${PUPSAVE_DRV:0:6}" = "mmcblk" ] && PUPSAVE_DRV="${PUPSAVE_DRV%p}"
+  # not sure about this, I don't have any nvme devices to test
+  #remove any trailing 'n'
+  [ "${PUPSAVE_DRV:0:4}" = "nvme" ] && PUPSAVE_DRV="${PUPSAVE_DRV%n}"
+ fi
  if probedisk ${PUPSAVE_DRV} | grep -q '|usbflash|' ; then
    echo "*** Pupsave is located in a flash storage device: $PUPSAVE_DRV" #debug
    PUPSAVE_MEDIA=usbflash
@@ -1475,6 +1485,11 @@ fi
 
 #---
 
+[ "$PXORGWIZARD" = "yes" ] && touch /pup_new/initrd/mnt/tmpfs/tmp/xwin_xorgwizard_cli
+#PNOX is a boot param. /etc/profile prevents X from starting if this file exists...
+[ "$PNOX" = "yes" ] && touch /pup_new/initrd/mnt/tmpfs/tmp/bootcnt.txt
+
+
 # make sure /pup_new/sbin/mount.exfat is not missing...
 [ ! -f /pup_new/sbin/mount.exfat ] && cp -vu /bin/mount.exfat* /pup_new/sbin/
 
@@ -1484,9 +1499,6 @@ if [ "$COPY_CRYPTSETUP" = "yes" ] ; then
       cp -v /bin/cryptsetup /pup_new/sbin/
 fi
 
-[ "$PXORGWIZARD" = "yes" ] && touch /pup_new/tmp/xwin_xorgwizard_cli
-#PNOX is a boot param. /etc/profile prevents X from starting if this file exists...
-[ "$PNOX" = "yes" ] && touch /pup_new/tmp/bootcnt.txt
 cp -a /DISTRO_SPECS /pup_new/initrd/
 cp /init* /pup_new/initrd/
 chmod -x /pup_new/initrd/init
