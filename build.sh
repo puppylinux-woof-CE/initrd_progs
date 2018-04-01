@@ -30,6 +30,12 @@ ARCH_LIST="default $DEFAULT_x86 x86_64 arm aarch64"
 
 PREBUILT_BINARIES="${SITE}/${INITRD_PROGS_STATIC}"
 
+#aarch64_PREBUILT_BINARIES=
+arm_PREBUILT_BINARIES='https://gitlab.com/woodenshoe-wi/initrd-progs-arm/raw/master/initrd_progs-arm-20180227-static.tar.xz'
+#i686_PREBUILT_BINARIES=
+#x86_64_PREBUILT_BINARIES=
+
+
 ARCH=`uname -m`
 case $ARCH in i*86) ARCH=$DEFAULT_x86 ;; esac
 OS_ARCH=$ARCH
@@ -47,8 +53,13 @@ function get_initrd_progs() {
 case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 	echo "If you made changes then don't forget to remove all 00_* directories first"
 	sleep 4
-	for a in ${ARCH_LIST#default } ; do $0 -nord -auto -arch $a ; done
-	pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
+	if [ -n "$2" ]; then
+		$0 -nord -auto -arch $2
+		pkgx=initrd_progs-${2}-$(date "+%Y%m%d")-static.tar.xz
+	else
+		for a in ${ARCH_LIST#default } ; do $0 -nord -auto -arch $a ; done
+		pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
+	fi
 	echo -e "\n\n\n*** Creating $pkgx"
 	while read ARCH ; do
 		for PROG in $(get_initrd_progs ${ARCH#00_}) ; do
@@ -110,6 +121,7 @@ esac
 ## command line ##
 while [ "$1" ] ; do
 	case $1 in
+		-fullinstall) FULL_INSTALL=yes ; shift ;;
 		-sysgcc)   USE_SYS_GCC=yes     ; USE_PREBUILT=no; shift ;;
 		-cross)    CROSS_COMPILE=yes   ; USE_PREBUILT=no; shift ;;
 		-all)      FORCE_BUILD_ALL=yes ; shift ;;
@@ -146,6 +158,12 @@ done
 
 function use_prebuilt_binaries() {
 	[ ! "$PREBUILT_BINARIES" ] && { echo "ERROR"; exit 1 ; }
+	case "$TARGET_ARCH" in
+		i686) [ -n "$i686_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${i686_PREBUILT_BINARIES} ;;
+		x86_64) [ -n "$x86_64_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${x86_64_PREBUILT_BINARIES} ;;
+		arm) [ -n "$arm_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${arm_PREBUILT_BINARIES} ;;
+		aarch64) [ -n "$aarch64_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${aarch64_PREBUILT_BINARIES} ;;
+	esac
 	zfile=0sources/${PREBUILT_BINARIES##*/}
 	if [ -f "$zfile" ] ; then
 		#verify file integrity
@@ -423,7 +441,7 @@ function generate_initrd() {
 		fi
 	done
 
-	[ ! -f bin/nano ] && rm -rf usr lib/terminfo
+	[ ! -f bin/nano -a ! -f bin/mp ] && rm -rf usr lib/terminfo
 
 	echo
 	if [ ! -f "$DISTRO_SPECS" -a -f ../DISTRO_SPECS ] ; then
@@ -432,6 +450,7 @@ function generate_initrd() {
 	if [ ! -f "$DISTRO_SPECS" -a ! -f ../0initrd/DISTRO_SPECS ] ; then
 		[ -f /etc/DISTRO_SPECS ] && DISTRO_SPECS='/etc/DISTRO_SPECS'
 		[ -f /initrd/DISTRO_SPECS ] && DISTRO_SPECS='/initrd/DISTRO_SPECS'
+		. /etc/rc.d/PUPSTATE #PUPMODE
 	fi
 	[ -f "$DISTRO_SPECS" ] && cp -f ${V} "${DISTRO_SPECS}" .
 	[ -x ../init ] && cp -f ${V} ../init .
@@ -441,6 +460,18 @@ function generate_initrd() {
 	cp -f ${V} ../pkg/busybox_static/bb-*-symlinks bin # essential
 	(  cd bin ; sh bb-create-symlinks 2>/dev/null )
 	sed -i 's|^PUPDESKFLG=.*|PUPDESKFLG=0|' init
+
+	if [ "$FULL_INSTALL" -o "$PUPMODE" = "2" ] ; then
+		rm -fv bin/cryptsetup
+		rm -fv bin/ntfs-3g
+		rm -fv bin/mount.exfat-fuse
+		rm -fv bin/fsck.fat
+		rm -fv bin/losetup-222
+		rm -fv bin/exfatfsck
+		rm -fv bin/resize2fs
+		mv init_full_install init
+		find -L bin -type l -delete
+	fi
 
 	find . | cpio -o -H newc > ../initrd 2>/dev/null
 	cd ..
@@ -465,8 +496,8 @@ function generate_initrd() {
 ###############################################
 
 if [ "$USE_PREBUILT" = "yes" ] ; then
-	use_prebuilt_binaries
 	select_target_arch
+	use_prebuilt_binaries
 else
 	V="-v"
 	set_compiler

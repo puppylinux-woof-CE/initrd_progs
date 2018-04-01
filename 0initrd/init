@@ -77,6 +77,7 @@ PATH="/bin:/sbin"
 export KERNELVER="$(uname -r)"
 VFAT_OUT_PARAM='shortname=mixed,quiet,utf8' #see also /sbin/set_plang
 . /DISTRO_SPECS #v412 has DISTRO_VERSION, DISTRO_FILE_PREFIX
+. /etc/rc.d/functions_x
 
 #precaution - if DISTRO_SPECS was not processed by 3builddistro...
 [ ! "$DISTRO_ZDRVSFS" ] && DISTRO_ZDRVSFS="zdrv_${DISTRO_FILE_PREFIX}_${DISTRO_VERSION}.sfs"
@@ -430,18 +431,6 @@ setup_onepupdrv() {
  return 0
 }
 
-format_bytes() {
- [ $1 ] || return
- if [ $1 -gt 1073741824 ] ; then #GB
-  SIZEX="`dc $1 1073741824 \/ p`"
-  SIZEX="`printf "%.1f" $SIZEX`"
-  SIZEX="${SIZEX%.0}G"
- else
-  SIZEX="$(($1/1048576))M"
- fi
- echo ${SIZEX}
-}
-
 
 load_ext_file() { #ex: stretchsave.4fs
  SAVE_SZ_FN=""
@@ -556,7 +545,7 @@ load_ext_file() { #ex: stretchsave.4fs
 setup_save_file(){
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
  if [ -f "${SAVE_MP}${SAVE_REL_FN}" ];then #savefile
-  PUPSAVE_SIZE="$(format_bytes $(stat -c %s "${SAVE_MP}${SAVE_REL_FN}"))"
+  PUPSAVE_SIZE="$(fx_format_bytes $(stat -c %s "${SAVE_MP}${SAVE_REL_FN}"))"
   echo -n "$(printf "${L_LOADING_PUPSAVE_FILE}" "$SAVE_REL_FN" "$SAVEPART" "$PUPSAVE_SIZE")" > /dev/console
  else
   echo -n "$(printf "${L_LOADING_PUPSAVE}" "$SAVE_REL_FN" "$SAVEPART")" > /dev/console
@@ -854,7 +843,7 @@ $TRY_PARTS_LAST"
 }
 
 get_part_info() {
- probedisk > /tmp/ALLDRVS
+ probedisk -hr > /tmp/ALLDRVS
  ls -1 /sys/block | grep -E '^scd|^sd|^mmc|^sr|^nvme' > /tmp/ALLDRVS0
  PCPARTSALL="$(/sbin/probepart_init -k)"
  HAVE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
@@ -948,7 +937,6 @@ if [ "$pfix" ];then
    fsck)    PFSCK="yes";;         #do a fsck of ${DISTRO_FILE_PREFIX}save file.
    fsckp)   PFSCKP="yes";;        #do fsck before first mount of ext partitions
    [0-9]*)  PIGNORELAST=$ONEFIX;; #blacklist last $ONEFIX folders (multisession).
-   psavebkp)PSAVEBKP='yes';;      #don't ignore pupsaves created by Pupsave Backup
    luks)    COPY_CRYPTSETUP=yes;; #make sure cryptsetup is not missing after switching root
    *)       echo "pfix=$ONEFIX is not a known boot parameter";;
   esac
@@ -1318,14 +1306,7 @@ if [ "$PUPSAVE" ];then #refine pupmode
  #   in order to change the $SAVE_LAYER to /pup_ro1
  PUPSAVE_DRV=$(echo $PUPSAVE | cut -f1 -d ',')
  if [ ! -d "/sys/block/$PUPSAVE_DRV" ];then #not device e.g. sr0, assume partition
-  #remove upto 3 trailing digits
-  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
-  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
-  PUPSAVE_DRV="${PUPSAVE_DRV%[0-9]}"
-  #remove any trailing 'p'
-  case $PUPSAVE_DRV in mmcblk*|nvme*) # mmcblk0p nvme0n1p
-   PUPSAVE_DRV="${PUPSAVE_DRV%p}" ;;
-  esac
+  PUPSAVE_DRV=$(fx_get_drvname $PUPSAVE_DRV)
  fi
  if probedisk ${PUPSAVE_DRV} -card-as-usbflash | grep -q '|usbflash|' ; then
    echo "*** Pupsave is located in a flash storage device: $PUPSAVE_DRV" #debug
@@ -1409,6 +1390,7 @@ echo "PSAVEPART='$PSAVEPART'"
 echo "PSAVEDIR='$SAVE_BP_DIR'"
 echo "PSUBDIR='$PSUBDIR'"
 echo "PUNIONFS='aufs'"
+echo "DOIMODS='yes'"
 [ -f /sbin/set_plang ] && plang_pupstate #echo
 [ "$UNDERDOG" ] && echo "UNDERDOG='$UNDERDOG'"
 ) > /pup_new/etc/rc.d/PUPSTATE

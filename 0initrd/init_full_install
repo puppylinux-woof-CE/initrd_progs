@@ -21,8 +21,9 @@ L_ADDING_MODULE="Adding module %s" #printf
 L_DEBUG_SAVE="To save debug info to a partition, type 'debugsave'"
 ##############################################################
 
-# alread called by /init
-#/sbin/usablefs # mount: /proc /sys /dev / (proc sysfs devtmpfs rootfs)
+if ! mount &>/dev/null ; then
+	/sbin/usablefs # mount: /proc /sys /dev / (proc sysfs devtmpfs rootfs)
+fi
 
 export TERM="xterm"
 export TERMINFO="/usr/share/terminfo"
@@ -206,7 +207,7 @@ ensure_mounted() {
 }
 
 get_part_info() {
- probedisk > /tmp/ALLDRVS
+ probedisk -hr > /tmp/ALLDRVS
  ls -1 /sys/block | grep -E '^scd|^sd|^mmc|^sr|^nvme' > /tmp/ALLDRVS0
  PCPARTSALL="$(/sbin/probepart_init -k)"
  HAVE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
