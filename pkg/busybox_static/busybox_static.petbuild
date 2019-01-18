@@ -7,6 +7,11 @@
 ## https://github.com/kanj/elfs/issues/4
 ## http://wiki.musl-libc.org/wiki/Building_Busybox
 
+if [ -z ${MWD} ] ; then
+	echo "Use build.sh"
+	exit 1
+fi
+
 [ -z $STATIC ] && STATIC=1
 
 . ../../func
@@ -14,13 +19,15 @@
 URL=http://busybox.net/downloads
 PKG=busybox_static
 SRC=busybox
-VER=1.28.2
+VER=1.29.3
 COMP=tar.bz2
 DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
 DEPS=
 CAT=BuildingBlock
 
 [ -z ${DOTconfig} ] && DOTconfig="DOTconfig"
+[ "$CREATE_PET" ]   && DOTconfig="DOTconfig_full"
+
 
 build() {
 	cd ${SRC}-${VER}
@@ -38,23 +45,35 @@ build() {
 	if [ "$STATIC" = "1" ] ; then
 		# initrd
 		ENABLE_KONFIG=$(
-			echo CONFIG_FEATURE_PREFER_APPLETS
 			echo CONFIG_STATIC
+			if [ "$CREATE_PET" ] ; then
+				echo CONFIG_ASH_JOB_CONTROL
+			else
+				echo CONFIG_FEATURE_PREFER_APPLETS
+			fi
 		)
 		DISABLE_KONFIG=$(
-			echo CONFIG_ASH_JOB_CONTROL
+			echo CONFIG_FEATURE_SH_STANDALONE 'not recommended...'
+			echo CONFIG_FEATURE_SH_NOFORK     'not recommended...'
 			echo FEATURE_VI_REGEX_SEARCH '(needs GNU regexp extensions)'
-			echo FEATURE_MOUNT_NFS '(needs rpc/rpc.h)'
-			echo FEATURE_INETD_RPC '(needs rpc/rpc.h)'
-			echo CONFIG_GREP 'not supported by musl'
-			echo CONFIG_EGREP 'not supported by musl'
-			echo CONFIG_FGREP 'not supported by musl'
+			echo FEATURE_MOUNT_NFS       'for linux < 2.6.23 (needs rpc/rpc.h)'
+			echo FEATURE_INETD_RPC       'for linux < 2.6.23 (needs rpc/rpc.h)'
+			echo CONFIG_GREP             'not supported by musl'
+			echo CONFIG_EGREP            'not supported by musl'
+			echo CONFIG_FGREP            'not supported by musl'
+			if [ "$CREATE_PET" ] ; then
+				echo CONFIG_FEATURE_PREFER_APPLETS
+			else
+				echo CONFIG_ASH_JOB_CONTROL
+			fi
 		)
 	else # main sfs
 		ENABLE_KONFIG=$(
 			echo CONFIG_ASH_JOB_CONTROL
 		)
 		DISABLE_KONFIG=$(
+			echo CONFIG_FEATURE_SH_STANDALONE 'not recommended...'
+			echo CONFIG_FEATURE_SH_NOFORK     'not recommended...'
 			echo CONFIG_FEATURE_PREFER_APPLETS
 			echo CONFIG_STATIC
 		)
@@ -77,14 +96,26 @@ build() {
 	done
 	#-
 	[ -d "$XPATH" ] && CRC="CROSS_COMPILE=${XCOMPILER}-" #XCOMPILER is set in func
-	_make ${MKFLAG} ${CRC} LDFLAGS="--static"
+	_make ${MKFLAG} ${CRC} LDFLAGS="--static" oldconfig
+	_make ${MKFLAG} ${CRC} LDFLAGS="--static" install
 	abort_if_file_not_found busybox
-	alist=$(./busybox --list 2>/dev/null)
-	if [ "x$alist" != "x" ] ; then
-		alist=$(echo "$alist" | tr '\n' ' ')
-		sed -i -e "s|applet_list='.*|applet_list='${alist}'|" \
-			../bb-create-symlinks
+	#--
+	if [ "$CREATE_PET" ] ; then
+		A=$ARCH
+		case $ARCH in i?86) A=x86 ;; esac
+		rm -f _install/bin/sh
+		mv _install ${SRC}-${VER}-${A}_musl_static
+		dir2pet -x -s -n ${SRC}-${VER}-${A}_musl_static
+		mkdir -p ${MWD}/00_${ARCH}/
+		mv -fv ${SRC}-${VER}-${A}_musl_static.pet ${MWD}/00_${ARCH}/ || exit
+		cp -v .config ../${DOTconfig}
+		cd ..
+		rm -rf ${SRC}-${VER}
+		exit 0
 	fi
+	#--
+	alist=$(find _install -type l | sed 's|.*/||' | sort | tr '\n' ' ')
+	sed -i -e "s%applet_list='.*%applet_list='${alist}'%" ../bb-create-symlinks
 	cp -v .config ../${DOTconfig}
 	cd -
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin

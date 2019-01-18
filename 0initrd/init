@@ -111,8 +111,8 @@ fsck_func() {
 # "$2" - fstype - ex: ext2
  case $2 in
   ext2|ext3|ext4) fsck_app='e2fsck' ; fsck_OPT='-y' ;;
-  vfat|msdos) fsck_app='fsck.fat' ; fsck_OPT='-y' ;;
-  exfat) fsck_app='exfatfsck' ; fsck_OPT='' ;;
+  #vfat|msdos) fsck_app='fsck.fat' ; fsck_OPT='-y' ;;
+  #exfat) fsck_app='exfatfsck' ; fsck_OPT='' ;;
   *) return ;;
  esac
  which "${fsck_app}" || {
@@ -363,7 +363,7 @@ load_sfs_file() {
   TFREEK=$(df | grep -m1 ' /mnt/tmpfs' | tr -s ' ' | cut -f 4 -d ' ')
   if [ $TFREEK -gt $SIZEZK ];then
    if [ "$ONE_MP" = "" ];then #101101 humongous initrd.
-    mv -af $ONE_FN /mnt/tmpfs/
+    mv -f $ONE_FN /mnt/tmpfs/
    else
     [ "$LOADMSG" ] && [ "$COPYMSG" ] && echo -en " \\033[1;35m${COPYMSG}\\033[0;39m" > /dev/console #purple.
     TOTAL_SIZEK_SFS_RAM=$(($TOTAL_SIZEK_SFS_RAM + $SIZEZK))
@@ -695,15 +695,12 @@ copy_folders() { #SAVE_LAYER=/pup_ro1
    [ -d ${SAVE_MP}/${ONEFOLDER}/etc ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/etc ${DESTDIR}/
    [ -d ${SAVE_MP}/${ONEFOLDER}/lib ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/lib ${DESTDIR}/
    [ -d ${SAVE_MP}/${ONEFOLDER}/opt ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/opt ${DESTDIR}/
-   if [ -d ${SAVE_MP}/${ONEFOLDER}/root/.var_saved ];then #100820 see /etc/rc.d/functions4puppy
-    mkdir -p ${DESTDIR}/var
-    cp -a -u ${SAVE_MP}/${ONEFOLDER}/root/.var_saved/* ${DESTDIR}/var/
-   fi
+   [ -d ${SAVE_MP}/${ONEFOLDER}/var ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/var ${DESTDIR}/
    [ -d ${SAVE_MP}/${ONEFOLDER}/root ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/root ${DESTDIR}/
-   [ -d ${SAVE_MP}/${ONEFOLDER}/root/.var_saved ] && rm -rf ${DESTDIR}/root/.var_saved
+   [ -d ${SAVE_MP}/${ONEFOLDER}/home ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/home ${DESTDIR}/
    [ -d ${SAVE_MP}/${ONEFOLDER}/usr ] && cp -a -u ${SAVE_MP}/${ONEFOLDER}/usr ${DESTDIR}/
    [ -f ${DESTDIR}/root/.XLOADED ] && rm -fv ${DESTDIR}/root/.XLOADED #toxic
-   [ -f ${DESTDIR}/var/shared/.XLOADED ] && rm -fv ${DESTDIR}/var/shared/.XLOADED #toxic
+   [ -f ${DESTDIR}/var/local/shared/.XLOADED ] && rm -fv ${DESTDIR}/var/local/shared/.XLOADED #toxic
    cp -a -u ${SAVE_MP}/${ONEFOLDER}/*.sfs ${DESTDIR}/ 2>/dev/null
    #delete deleted files (.wh.filename)... 110212 screen out .wh..wh..opq
    WHITEOUTS="$(find ${DESTDIR} -xdev -type f -name .wh.* | grep -v '__dir_opaque' | grep -v '.wh..wh.')" #110212
@@ -843,10 +840,10 @@ $TRY_PARTS_LAST"
 }
 
 get_part_info() {
- probedisk -hr > /tmp/ALLDRVS
- ls -1 /sys/block | grep -E '^scd|^sd|^mmc|^sr|^nvme' > /tmp/ALLDRVS0
- PCPARTSALL="$(/sbin/probepart_init -k)"
- HAVE_PARTS="$(echo "$PCPARTSALL" | grep '^/dev/' | cut -f 1-2 -d '|'  | grep -E 'f2fs|udf|iso9660|ext2|ext3|ext4|reiserfs|msdos|vfat|minix|ntfs' | sed -e 's%/dev/%%')"
+ probedisk -hr > /tmp/probedisk.log
+ probepart -hr > /tmp/probepart.log
+ sed 's%|.*%% ; s%.*/%%' /tmp/probedisk.log > /tmp/ALLDRVS0
+ HAVE_PARTS="$(cat /tmp/probepart.log | cut -f 1-2 -d '|' | sed -e 's%/dev/%%')"
  [ "$PDEBUG" ] && echo "$HAVE_PARTS" > /tmp/HAVE_PARTS
 }
 
@@ -920,6 +917,9 @@ TOTAL_SIZEK_SFS_RAM=0
 
 # show menu with pupsaves
 [ $psavemenu ] && PSAVEMENU=$psavemenu
+
+# Booting from external USB disks may not find files on time. Wait early.
+[ "${PMEDIA:0:3}" = "usb" ] && wait_for_usb
 
 RDSH=""
 if [ "$pfix" ];then
@@ -1041,7 +1041,13 @@ if [ "$P_PART" ];then
  if [ "$SAVEPART" = "" ];then #setup SAVEPART
   [ "$P_MP" ] || P_MP="$(mount | grep -m1 "/dev/$P_PART " | cut -f 3 -d ' ')"
   [ -f ${P_MP}${PSUBDIR}/SAVEMARK ] && PSAVEMARK="$(cat ${P_MP}${PSUBDIR}/SAVEMARK)" #partition no. that has or will-have ${DISTRO_FILE_PREFIX}save.2fs. 101020
-  [ "$PSAVEMARK" ] && SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: sda2
+  if [ "$PSAVEMARK" ];then
+   SAVEPART="${BOOTDRV}${PSAVEMARK}" #note, PSAVEMARK could also be a kernel boot param. ex: 2
+   if [ "$(echo $HAVE_PARTS | grep "$SAVEPART")" = "" ];then #partition not exist
+    SAVEPART=''
+    PSAVEMARK=''
+   fi
+  fi
   [ "$SAVEPART" ] || SAVEPART="$P_PART"
  fi
 fi
@@ -1130,26 +1136,14 @@ if [ "$PIMOD" = "" ]; then
    echo "Using $PIMOD_FN"
   fi
 fi
-#insmod modules needed by keyboard
+#modprobe modules needed by keyboard
 if [ "$PIMOD" != "" ]; then
- MODSPATH="/pup_new/lib/modules/$KERNELVER"
+ [ -L "/lib/modules/$KERNELVER" ] || ln -sv /pup_new/lib/modules/$KERNELVER /lib/modules/$KERNELVER
+ [ -L "/lib/firmware" ] || ln -sv /pup_new/lib/firmware /lib/firmware
  for ONEMOD in `echo -n "$PIMOD" | tr ',' ' '`;do
-  CURMOD=""
-  if [ -f "${MODSPATH}/${ONEMOD}" ];then
-   CURMOD="$ONEMOD"
-  else
-   CURMOD="`grep -m1 $ONEMOD /pup_new/etc/modules/modules.order-${KERNELVER}`"
-   if [ "$CURMOD" = "" ];then
-    MODPATN="`echo -n "$ONEMOD" | tr '_' '-'`"
-    CURMOD="`grep -m1 "$MODPATN" /pup_new/etc/modules/modules.order-${KERNELVER}`"
-   fi
-   [ -f "${MODSPATH}/${CURMOD}" ] || CURMOD=""
-  fi
-  if [ "$CURMOD" != "" ];then
-   echo -n "$(printf "${L_ADDING_MODULE}" "$CURMOD")" > /dev/console
-   insmod "${MODSPATH}/${CURMOD}" > /dev/console 2>&1
-   check_status $?
-  fi
+  echo -n "$(printf "${L_ADDING_MODULE}" "$ONEMOD")" > /dev/console
+  modprobe "$ONEMOD" > /dev/console 2>&1
+  check_status $?
  done
 fi
 
@@ -1355,7 +1349,7 @@ esac
 
 umount_unneeded
 
-echo -n $TOTAL_SIZEK_SFS_RAM > /tmp/sfs_ram_sizek
+echo -n $(($TOTAL_SIZEK_SFS_RAM - 5)) > /tmp/sfs_ram_sizek
 
 [ "$DEV1FS" ] || DEV1FS="$(echo "$PDRV" | cut -f 2 -d ',')"
 [ "$ATADRIVES" ] || ATADRIVES="$(cat /tmp/ATADRIVES0 | tr '\n' ' ')"
@@ -1391,6 +1385,7 @@ echo "PSAVEDIR='$SAVE_BP_DIR'"
 echo "PSUBDIR='$PSUBDIR'"
 echo "PUNIONFS='aufs'"
 echo "DOIMODS='yes'"
+echo "DOMIBS='no'"
 [ -f /sbin/set_plang ] && plang_pupstate #echo
 [ "$UNDERDOG" ] && echo "UNDERDOG='$UNDERDOG'"
 ) > /pup_new/etc/rc.d/PUPSTATE
@@ -1496,6 +1491,18 @@ if [ "$RDSH" = "yes" ];then
  echo "${L_DROPPED_TO_INITRD_SHELL}" > /dev/console
  exec /bin/sh >/dev/console 2>&1
 fi
+
+#--
+TMPFS=/initrd/files
+mkdir -p /pup_new${TMPFS}
+mount -t tmpfs tmpfs -o mode=0755 /pup_new${TMPFS}
+#cp -a bin /pup_new${TMPFS} 2>/dev/null
+cp -a bin sbin etc dev lib locale usr var /pup_new${TMPFS} 2>/dev/null
+sync
+size=$(du -c /pup_new${TMPFS} | tail -n 1 | cut -f 1)
+size=$(($size + 512))
+mount -o remount,ro,size=${size}k /pup_new${TMPFS}
+#--
 
 sync
 [ -d "/proc/bus/usb" ] && umount /proc/bus/usb

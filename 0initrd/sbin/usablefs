@@ -17,13 +17,6 @@ mount -t usbfs none /proc/bus/usb 2>/dev/null
 
 ln -s /proc/mounts /etc/mtab 2>/dev/null
 
-# if devtmpfs fails, we're probably dealing with old stuff...
-if [ ! -e /dev/tty ] ; then
-	if [ "`mount | cut -f 1 -d ' ' | grep devtmpfs`" = "" ] ; then
-		tar -zxf /dev.tar.gz  #no devtmpfs
-	fi
-fi
-
 # loop1-15
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 	[ -e /dev/loop${i} ] && continue
@@ -32,8 +25,5 @@ done
 
 # busybox 1.25 losetup somehow requires /dev/loop/X in the initrd to work..
 # edit: only if CONFIG_FEATURE_DEVFS is enabled
-mkdir -p /dev/loop
-ls /dev/loop[0-9]* | sed 's|/dev/loop||' | \
-while read i ; do ln -sf ../loop${i} /dev/loop/${i} ; done
 
 ### END ###
