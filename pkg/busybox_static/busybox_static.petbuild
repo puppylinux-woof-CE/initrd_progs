@@ -35,6 +35,9 @@ build() {
 	for p in $(ls ../patches/*.patch 2>/dev/null | sort) ; do
 		patch -p1 < $p
 	done
+	for p in $(ls ../patches-alpine/*.patch 2>/dev/null | sort) ; do
+		patch -p1 < $p
+	done
 	[ -f ../${DOTconfig} ] && cp -fv ../${DOTconfig} .config
 	#-
 	BLACKLIST=$(
