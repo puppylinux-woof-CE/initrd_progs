@@ -117,14 +117,14 @@ build() {
 		exit 0
 	fi
 	#--
-	alist=$(find _install -type l | sed 's|.*/||' | sort | tr '\n' ' ')
-	sed -i -e "s%applet_list='.*%applet_list='${alist}'%" ../bb-create-symlinks
+	#alist=$(find _install -type l | sed 's|.*/||' | sort | tr '\n' ' ')
+	#sed -i -e "s%applet_list='.*%applet_list='${alist}'%" ../bb-create-symlinks
 	cp -v .config ../${DOTconfig}
 	cd -
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin
 	_install ${SRC}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
-	install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
-	install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
+	#install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
+	#install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
 }
 
 package() {

@@ -59,18 +59,20 @@ L_SFFS_ERROR="ERROR: savefile filesystem is not ext2/3/4"
 
 /sbin/usablefs # mount: /proc /sys /dev / (proc sysfs devtmpfs rootfs)
 
-# a full-install OS has 'fullinstall' param in the cmdline
-# it's added by puppyinstaller (or you can add it manually)
 for i in $(cat /proc/cmdline) ; do
   [ "$i" = "fullinstall" ] && exec /init_full_install
+  [ "$i" = "bootmenu" ] && ZBOOTMENU=1
 done
+# always call init-bootmenu on ARM devices
+[ "$(uname -m | grep arm)" ] && ZBOOTMENU=1
 
 export TERM="xterm"
-export TERMINFO="/usr/share/terminfo"
+export TERMINFO="/etc/terminfo"
 export LANG=C
+export INIT_SCRIPT=1
+
 PATH="/bin:/sbin"
 export KERNELVER="$(uname -r)"
-VFAT_OUT_PARAM='noatime,shortname=mixed,quiet,utf8' #see also /sbin/set_plang
 . /DISTRO_SPECS #v412 has DISTRO_VERSION, DISTRO_FILE_PREFIX
 . /etc/rc.d/functions_x
 export DISTRODESC="${DISTRO_NAME} ${DISTRO_VERSION} - Linux ${KERNELVER} - `uname -m`"
@@ -120,37 +122,6 @@ fsck_func() {
   ${fsck_app} ${fsck_OPT} ${1} > /dev/console 2>&1 || sleep 3 #so the user has time to read the error msg..
   FSCKDPARTS="${FSCKDPARTS}${1}|"
  fi
-}
-
-mntfunc() {
- MNT_T="$1"    #ex: vfat
- MNT_DEV="$2"  #ex: /dev/sda1
- MNT_DIR="$3"  #ex: /mnt/sda1
- MNT_O='noatime'
- MNT_DSK="${MNT_DEV:5:3}"
- if [ "$PTRIM" = "yes" -a "$MNT_DSK" != "" -a "$(cat /sys/block/$MNT_DSK/queue/rotational)" = "0" ];then
-  if [ "$MNT_T" = "ext4" -o "$MNT_T" = "f2fs" ];then
-    MNT_O="${MNT_O},discard"
-  fi
- fi
- [ "$PFSCKP" = "yes" ] && fsck_func "$MNT_DEV" "$MNT_T"
- case $MNT_T in
-  ntfs)
-   ntfs-3g $MNT_DEV $MNT_DIR -o umask=0,no_def_opts,noatime,rw,silent 2>/dev/null #default is rw. 130211 add silent.
-   ntfsRETVAL=$?
-   [ $ntfsRETVAL -eq 0 ] && return 0
-   if [ $ntfsRETVAL -eq 14 ];then
-    echo -e "\\033[1;31m${L_WINDOWS_HIBERNATED}\\033[0;39m" >/dev/console #31=red
-    return 14
-   else
-    ntfs-3g $MNT_DEV $MNT_DIR -o umask=0,no_def_opts,noatime,rw,force,silent 2>/dev/null #130211 add silent.
-   fi
-  ;;
-  vfat)  mount -t $MNT_T -o $VFAT_OUT_PARAM $MNT_DEV $MNT_DIR ;;
-  exfat) mount.exfat-fuse -o $MNT_O $MNT_DEV $MNT_DIR ;;
-  *) mount -t $MNT_T -o $MNT_O $MNT_DEV $MNT_DIR ;;
- esac
- return $?
 }
 
 check_status() #args: [-critical] $RET_VAL "$ERROR_MSG"
@@ -247,11 +218,13 @@ ensure_mounted() {
  [ "$ONE_MP" ] && return
  ONE_FS="$(echo "$HAVE_PARTS" | grep -m1 "${1}|" | cut -f 2 -d '|')"
  ONE_MP="${2}"
- [ -d "$ONE_MP" ] || mkdir -p $ONE_MP
- mntfunc $ONE_FS /dev/${1} $ONE_MP #-t $ONE_FS /dev/$ONE_PART $ONE_MP
+ if [ "$PFSCKP" = "yes" ] ; then # pfix=fsckp
+   fsck_func /dev/${1} $ONE_FS
+ fi
+ /sbin/mountpartition /dev/${1} $ONE_MP $ONE_FS #-t $ONE_FS /dev/$ONE_PART $ONE_MP
  if [ $? -ne 0 ] ; then
   sleep 3 # usb optical drive showing as /sys/block/sr0, but won't mount, needs more delay...
-  mntfunc $ONE_FS /dev/${1} $ONE_MP
+  /sbin/mountpartition /dev/${1} $ONE_MP $ONE_FS
   [ $? -ne 0 ] && { echo "${1} on $ONE_MP as $ONE_FS mount failed."; ONE_MP=""; return 1; }
  fi
  # fsckme.flg is created by rc.sysinit and deleted by rc.shutdown
@@ -723,27 +696,13 @@ find_save_file() {
   #validate savefiles here
   IS_OK=""
   case $ONE_SAVE in
-   *.2fs|*.3fs|*.4fs)
-    [ -s "$ONE_SAVE" ] && IS_OK="yes"
-   ;;
-   *.BKP-*) #written by /usr/sbin/pupsave-backup
-    case $ONE_SAVE in
-     *.2fs*|*.3fs*|*.4fs*) IS_OK="$PSAVEBKP" ;;
-     *) [ "$ONE_FS_IS_LINUX" = "yes" ] && IS_OK="$PSAVEBKP" ;;
-    esac
-   ;;
-   *)
-    [ "$ONE_FS_IS_LINUX" = "yes" ] && [ -d "$ONE_SAVE" ] && IS_OK="yes"
-   ;;
+   *.2fs|*.3fs|*.4fs) [ -s "$ONE_SAVE" ] && IS_OK="yes" ;;
+   *) [ "$ONE_FS_IS_LINUX" = "yes" ] && [ -d "$ONE_SAVE" ] && IS_OK="yes" ;;
   esac
   [ "$IS_OK" = "yes" ] && PUP_SAVES="${PUP_SAVES}${2},${3},${SAVE_DIR}$(basename $ONE_SAVE)
 "
  done
  PUP_SAVES="$(echo "$PUP_SAVES")" #remove trailing newline char
- echo "MENU_MAX_PUPSAVES=${MENU_MAX_PUPSAVES}" #debug
- if [ "$MENU_MAX_PUPSAVES" ] ; then
-   PUP_SAVES="$(echo "$PUP_SAVES" | head -n $MENU_MAX_PUPSAVES)"
- fi
 }
 
 search_func() {
@@ -828,6 +787,8 @@ fatal_error() {
 
 clear #clear the screen.
 
+[ "$ZBOOTMENU" ] && . /sbin/init-bootmenu
+
 echo -en "\\033[0;34m***\\033[0;37m ${DISTRO_NAME} ${DISTRO_VERSION}"
 echo -en "\\033[0;34m -\\033[0;37m Linux ${KERNELVER} "
 echo -en "\\033[0;31m[\\033[0;37m`uname -m`\\033[0;31m]"
@@ -865,9 +826,6 @@ echo -e "\\033[0;34m ***\\033[0;39m"
 PDEBUG=1
 TOTAL_SIZEK_SFS_RAM=0
 
-# show menu with pupsaves
-[ $psavemenu ] && PSAVEMENU=$psavemenu
-
 # Booting from external USB disks may not find files on time. Wait early.
 [ "${PMEDIA:0:3}" = "usb" ] && wait_for_usb
 
@@ -894,11 +852,6 @@ fi
 
 [ "$PRAMONLY" != "yes" ] && [ -f /BOOT_SPECS ] && . /BOOT_SPECS
 
-if [ "$PSAVEMENU" ] ; then
- #MENU_MAX_PUPSAVES=number
- MENU_MAX_PUPSAVES=$(echo "$PSAVEMENU" | grep -o '[0-9]' | tr '\n' ' ' | sed 's| ||g')
-fi
-
 [ "$TZ" ] && export TZ
 hwclock -l -s
 
@@ -921,11 +874,6 @@ SAVE_BP_DIR=""
 [ -f /${F_DEF_FN} ] && { FDRV="rootfs,rootfs,/$F_DEF_FN"; F_DEF_FN=""; }
 [ -f /${A_DEF_FN} ] && { ADRV="rootfs,rootfs,/$A_DEF_FN"; A_DEF_FN=""; }
 [ -f /${Y_DEF_FN} ] && { YDRV="rootfs,rootfs,/$Y_DEF_FN"; Y_DEF_FN=""; }
-
-#-----------------------------
-# see if actually a non-huge kernel is being used..
-not_a_huge_kernel_stuff && check_status 0
-#-----------------------------
 
 get_part_info
 grep -v '^sr' /tmp/ALLDRVS0 > /tmp/ATADRIVES0
@@ -1057,19 +1005,9 @@ find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
 #moved up here to ensure config files are available
 [ "$SAVEPART" ] && ensure_save_mounted
 
-#bring back Underdog Linux...
-if [ ! "$UNDERDOG" ] ; then
-  [ -s "${SAVE_MP}${PSUBDIR}/underdog.lnx" ] && UNDERDOG="`cat ${SAVE_MP}${PSUBDIR}/underdog.lnx`"
-fi
-[ "$UNDERDOG" ] && { decode_id "$UNDERDOG"; UNDERDOG="$ONE_PART"; }
-if [ "$UNDERDOG" ];then #boot parameter
- ensure_mounted "$UNDERDOG" "/pup_ud"
- if [ "$ONE_MP" ];then
-  mount -o remount,append:${ONE_MP}=rr /pup_new
-  #if [ $? -eq 0 ];then
-   #do any necessary underdog fiddles
-  #fi
- fi
+# underdog
+if [ -f /sbin/setup_underdog ] ; then #calls decode_id, ensure_mounted
+  . /sbin/setup_underdog #creates /pup_ud
 fi
 
 #support initmodules.txt
@@ -1179,57 +1117,6 @@ if [ "${SAVE_MP}" != "" -a "$PRAMONLY" != "yes" ];then #have mounted save? parti
       PUPSAVE="$(echo -n $PUP_SAVES | cut -f $NUMSAVE -d ' ')"
       PSPATH="${SAVE_MP}/$(echo "$PUPSAVE" | cut -f 3 -d ',')"
       echo "PSPATH=${PSPATH}" #debug
-      case "$PSPATH" in *.tar.[gx]z) #compressed archive
-       PSPATH_NOTGZ=${PSPATH%.tar.[gx]z} #remove trailing 'tar.[gx]z'
-       echo "PSPATH_NOTGZ=${PSPATH_NOTGZ}" #debug
-       case "$PSPATH" in
-         *".2fs"*|*".3fs"*|*".4fs"*) savefile="yes" ;;
-         *) savefolder="yes" ;;
-       esac
-       case "$PSPATH" in
-         *.tar.gz) TAROPT="-z" ;;
-         *.tar.xz) TAROPT="-J" ;;
-       esac
-       echo "savefile=${savefile}"     #debug
-       echo "savefolder=${savefolder}" #debug
-       cdir=$(pwd)
-       #--
-       if [ "$savefolder" = "yes" ] ; then
-         mkdir -p "$PSPATH_NOTGZ"
-         cd "$PSPATH_NOTGZ"
-         echo "Extracting ${PSPATH##*/}..." >/dev/console #basename
-         tar -x $TAROPT -f "$PSPATH" && TAROK=yes
-         itsinside=$(ls -d ${DISTRO_FILE_PREFIX}save* | head -n 1)
-         if [ "$itsinside" ] ; then
-           cd "$cdir"
-           mv -fv "$PSPATH_NOTGZ" "$PSPATH_NOTGZ".2
-           sync
-           mv -fv "$PSPATH_NOTGZ".2/${itsinside} "$PSPATH_NOTGZ"
-           sync
-           rm -rfv "$PSPATH_NOTGZ".2
-         fi
-       else #savefile
-         cd "${PSPATH%/*}" #dirname $PSPATH
-         echo "Extracting ${PSPATH##*/}..." >/dev/console #basename $PSPATH
-         tar -x $TAROPT -f "$PSPATH" && TAROK=yes
-       fi
-       sync
-       #--
-       echo "TAROK=${TAROK}" #debug
-       if [ "$TAROK" = "yes" ] ; then
-         PUPSAVE=${PUPSAVE%.tar.[gx]z} #remove trailing 'tar.[gx]z'
-         rm -fv "$PSPATH"
-       else
-         PUPSAVE=""
-         echo "Error extracting ${PSPATH##*/}"
-         echo -e "\\033[1;31mError extracting ${PSPATH##*/}\\033[0;39m" >/dev/console #31=red
-         [ "$savefolder" = "yes" ] && rm -rf "$PSPATH_NOTGZ"
-         [ "$savefile" = "yes" ] && rm -fv "$PSPATH_NOTGZ"
-       fi
-       cd $cdir
-       echo -e "----\n" #debug
-       ;;
-      esac
      fi
      #----------------------------------------------------
     fi
@@ -1403,6 +1290,7 @@ fi
 [ "$PNOX" = "yes" ] && touch /pup_new/initrd/mnt/tmpfs/tmp/bootcnt.txt
 
 cp -a /DISTRO_SPECS /pup_new/initrd/
+[ ! -f /pup_new/etc/DISTRO_SPECS ] && cp -a /DISTRO_SPECS /pup_new/etc/
 cp /init* /README.txt /pup_new/initrd/
 chmod -x /pup_new/initrd/init
 dmesg > /tmp/dmesg.txt
@@ -1418,18 +1306,6 @@ if [ "$RDSH" = "yes" ];then
  echo "${L_DROPPED_TO_INITRD_SHELL}" > /dev/console
  exec /bin/sh >/dev/console 2>&1
 fi
-
-#--
-TMPFS=/initrd/files
-mkdir -p /pup_new${TMPFS}
-mount -t tmpfs tmpfs -o mode=0755 /pup_new${TMPFS}
-#cp -a bin /pup_new${TMPFS} 2>/dev/null
-cp -a bin sbin etc dev lib locale usr var /pup_new${TMPFS} 2>/dev/null
-sync
-size=$(du -c /pup_new${TMPFS} | tail -n 1 | cut -f 1)
-size=$(($size + 512))
-mount -o remount,ro,size=${size}k /pup_new${TMPFS}
-#--
 
 sync
 [ -d "/proc/bus/usb" ] && umount /proc/bus/usb
