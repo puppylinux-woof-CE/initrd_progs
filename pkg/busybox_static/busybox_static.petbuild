@@ -107,6 +107,12 @@ build() {
 		A=$ARCH
 		case $ARCH in i?86) A=x86 ;; esac
 		rm -f _install/bin/sh
+		find _install -type l | sed 's|_install/||' > _install/bin/busybox.lst
+		find _install -type l -delete
+		sync
+		rm -rf _install/sbin
+		rm -rf _install/usr
+		sync
 		mv _install ${SRC}-${VER}-${A}_musl_static
 		dir2pet -x -s -n ${SRC}-${VER}-${A}_musl_static
 		mkdir -p ${MWD}/00_${ARCH}/
@@ -117,14 +123,10 @@ build() {
 		exit 0
 	fi
 	#--
-	#alist=$(find _install -type l | sed 's|.*/||' | sort | tr '\n' ' ')
-	#sed -i -e "s%applet_list='.*%applet_list='${alist}'%" ../bb-create-symlinks
 	cp -v .config ../${DOTconfig}
 	cd -
 	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/bin
 	_install ${SRC}-${VER}/busybox ./${PKG}-${VER}-${ARCH}/bin
-	#install -m 0755 bb-create-symlinks ./${PKG}-${VER}-${ARCH}/bin
-	#install -m 0755 bb-delete-symlinks ./${PKG}-${VER}-${ARCH}/bin
 }
 
 package() {
