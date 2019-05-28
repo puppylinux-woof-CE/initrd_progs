@@ -56,6 +56,10 @@ function retrieve() {
 		[ -f ${MWD}/0sources/${FILE} ] && ZZDL=0
 		zzoutfile="${MWD}/0sources/${FILE}"
 	fi
+	if [ -f "$zzoutfile" ] && [ ! -s "$zzoutfile" ] ; then
+		ZZDL=1 # empty file , must redownload
+		rm -f "$zzoutfile"
+	fi
 	#--
 	if [ $ZZDL -eq 0 ] ; then
 		[ "$DLD_ONLY" = "yes" ] && echo "Already downloaded ${FILE}"
