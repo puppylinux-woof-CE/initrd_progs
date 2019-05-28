@@ -7,6 +7,8 @@ export MKFLG
 export MWD=`pwd`
 export TARGET_TRIPLET=
 
+ARCH_LIST="i686 x86_64 arm aarch64"
+
 SITE=http://01micko.com/wdlkmpx/woof-CE
 
 X86_CC=cross-compiler-i686-20190424.tar.xz
@@ -16,28 +18,21 @@ ARM64_CC=cross-compiler-aarch64-20190424.tar.xz
 
 INITRD_PROGS_STATIC=initrd_progs-20190424-static.tar.xz
 
-DEFAULT_x86=$(echo $X86_CC | cut -d '-' -f 3)
-DEFAULT_ARM64=aarch64
-
-TARGET_TRIPLET_x86=${DEFAULT_x86}-linux-musl
-TARGET_TRIPLET_x86_64="x86_64-linux-musl"
-#TARGET_TRIPLET_arm="arm-linux-musleabi"  #arm v5
-TARGET_TRIPLET_arm="arm-linux-musleabihf" #arm v6
-TARGET_TRIPLET_arm64="aarch64-linux-musl"
-
-ARCH_LIST="default $DEFAULT_x86 x86_64 arm aarch64"
-
 PREBUILT_BINARIES="${SITE}/${INITRD_PROGS_STATIC}"
-
 #aarch64_PREBUILT_BINARIES=
 #arm_PREBUILT_BINARIES=
 #i686_PREBUILT_BINARIES=
 #x86_64_PREBUILT_BINARIES=
 
+TARGET_TRIPLET_x86="i686-linux-musl"
+TARGET_TRIPLET_x86_64="x86_64-linux-musl"
+TARGET_TRIPLET_arm="arm-linux-musleabihf" #arm v6
+TARGET_TRIPLET_arm64="aarch64-linux-musl"
 
 ARCH=`uname -m`
-case $ARCH in i*86) ARCH=$DEFAULT_x86 ;; esac
 OS_ARCH=$ARCH
+
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 function get_initrd_progs() {
 	local var=INITRD_PROGS
@@ -57,7 +52,7 @@ case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 		$0 -nord -auto -arch $2
 		pkgx=initrd_progs-${2}-$(date "+%Y%m%d")-static.tar.xz
 	else
-		for a in ${ARCH_LIST#default } ; do $0 -nord -auto -arch $a ; done
+		for a in ${ARCH_LIST} ; do $0 -nord -auto -arch $a ; done
 		pkgx=initrd_progs-$(date "+%Y%m%d")-static.tar.xz
 	fi
 	echo -e "\n\n\n*** Creating $pkgx"
@@ -73,7 +68,7 @@ case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 esac
 
 case "$1" in w|w_apps|c)
-	for a in ${ARCH_LIST#default } ; do $0 -nord -auto -arch $a -pkg w_apps ; done
+	for a in ${ARCH_LIST} ; do $0 -nord -auto -arch $a -pkg w_apps ; done
 	exit
 esac
 
@@ -93,7 +88,6 @@ Options:
   -all        : force building all *_static pkgs
   -arch target: compile for target arch
   -sysgcc     : use system gcc
-  -cross      : use cross compiler
   -download   : download pkgs only, this overrides other options
   -specs file : DISTRO_SPECS file to use
   -prebuilt   : use prebuilt binaries
@@ -101,7 +95,7 @@ Options:
   -help       : show help and exit
 
   Valid <targets> for -arch:
-      ${ARCH_LIST#default }
+      ${ARCH_LIST}
 "
 }
 
@@ -116,9 +110,7 @@ INITRD_COMP=gz
 ## command line ##
 while [ "$1" ] ; do
 	case $1 in
-		-fullinstall) FULL_INSTALL=yes ; shift ;;
 		-sysgcc)   USE_SYS_GCC=yes     ; USE_PREBUILT=no; shift ;;
-		-cross)    CROSS_COMPILE=yes   ; USE_PREBUILT=no; shift ;;
 		-all)      FORCE_BUILD_ALL=yes ; shift ;;
 		-download) DLD_ONLY=yes        ; shift ;;
 		-prebuilt) USE_PREBUILT=yes    ; shift ;;
@@ -156,15 +148,15 @@ fi
 function use_prebuilt_binaries() {
 	[ ! "$PREBUILT_BINARIES" ] && exit_error "No prebuilt binaries"
 	case "$TARGET_ARCH" in
-		i686) [ -n "$i686_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${i686_PREBUILT_BINARIES} ;;
-		x86_64) [ -n "$x86_64_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${x86_64_PREBUILT_BINARIES} ;;
-		arm) [ -n "$arm_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${arm_PREBUILT_BINARIES} ;;
+		i686)    [ -n "$i686_PREBUILT_BINARIES" ]    && PREBUILT_BINARIES=${i686_PREBUILT_BINARIES} ;;
+		x86_64)  [ -n "$x86_64_PREBUILT_BINARIES" ]  && PREBUILT_BINARIES=${x86_64_PREBUILT_BINARIES} ;;
+		arm)     [ -n "$arm_PREBUILT_BINARIES" ]     && PREBUILT_BINARIES=${arm_PREBUILT_BINARIES} ;;
 		aarch64) [ -n "$aarch64_PREBUILT_BINARIES" ] && PREBUILT_BINARIES=${aarch64_PREBUILT_BINARIES} ;;
 	esac
 	zfile=0sources/${PREBUILT_BINARIES##*/}
 	if [ -f "$zfile" ] ; then
 		#verify file integrity
-		tar -taf "$zfile" &>/dev/null || rm -f "$zfile"
+		tar -tf "$zfile" &>/dev/null || rm -f "$zfile"
 	fi
 	if [ ! -f "$zfile" ] ; then
 		mkdir -p 0sources
@@ -175,7 +167,7 @@ function use_prebuilt_binaries() {
 		fi
 	fi
 	echo "* Extracting ${zfile##*/}..."
-	tar -xaf "$zfile" || {
+	tar -xf "$zfile" || {
 		rm -f "$zfile"
 		exit_error "ERROR extracting $zfile"
 	}
@@ -183,74 +175,45 @@ function use_prebuilt_binaries() {
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-function set_compiler() {
-	which make &>/dev/null || fatal_error echo "It looks like development tools are not installed.. stopping"
-	if [ "$USE_SYS_GCC" = "no" -a "$CROSS_COMPILE" = "no" ] ; then
-		# if we're using the script in a non-x86 system
-		# it means that the system gcc must be chosen by default
-		# perhaps we're running qemu or a native linux os
-		case $ARCH in
-			i?86|x86_64) CROSS_COMPILE=yes ;;
-			*) USE_SYS_GCC=yes ;;
-		esac
-	fi
-	if [ "$USE_SYS_GCC" = "yes" ] ; then
-		which gcc &>/dev/null || fatal_error "No gcc, aborting..."
-		echo -e "\nBuilding in: $ARCH"
-		echo -e "\n* Using system gcc\n"
-		sleep 1.5
-	else
-		CROSS_COMPILE=yes #precaution
-		case $ARCH in
-			i?86|x86_64) ok=yes ;;
-			*)	fatal_error "*** Only use x86 systems to cross-compile\n* Run $0 -sysgcc to use the system gcc ... \n" ;;
-		esac
-	fi
-}
-
-#--
-
 function select_target_arch() {
 	[ "$CROSS_COMPILE" = "no" -a "$USE_PREBUILT" = "no" ] && return
+	[ "$USE_SYS_GCC" = "yes" ] && return
 	#-- defaults
 	case $TARGET_ARCH in
 		default) TARGET_ARCH=${ARCH} ;;
-		x86) TARGET_ARCH=${DEFAULT_x86} ;;
-		arm64) TARGET_ARCH=${DEFAULT_ARM64} ;;
+		x86|i?86)TARGET_ARCH=i686    ;;
+		arm64)   TARGET_ARCH=aarch64 ;;
+		arm*)    TARGET_ARCH=arm     ;;
 	esac
 	VALID_TARGET_ARCH=no
 	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
 		for a in $ARCH_LIST ; do
-			[ "$TARGET_ARCH" = "$a" ] && VALID_TARGET_ARCH=yes && break
+			if [ "$TARGET_ARCH" = "$a" ] ; then
+				VALID_TARGET_ARCH=yes
+				ARCH=$a
+				break
+			fi
 		done
 		if [ "$VALID_TARGET_ARCH" = "no" ] ; then
 			exit_error "Invalid target arch: $TARGET_ARCH"
 		fi
-		[ "$TARGET_ARCH" != "default" ] && ARCH=${TARGET_ARCH}
 	fi
 	#--
 	if [ "$VALID_TARGET_ARCH" = "no" -a "$PROMPT" = "yes" ] ; then
 		echo -e "\nWe're going to compile apps for the init ram disk"
 		echo -e "Select the arch you want to compile to\n"
 		x=1
-		for a in $ARCH_LIST ; do
-			case $a in
-				default) echo "	${x}) default [${ARCH}]" ;;
-				*) echo "	${x}) $a" ;;
-			esac
-			let x++
-		done
-		echo "	*) default [${ARCH}]"
-		echo -en "\nEnter your choice: " ; read choice
+		for i in $ARCH_LIST ; do echo "	${x}) $i" ; let x++ ; done
 		echo
+		echo " * default = ${ARCH} (just press enter to use this - CTRL-C to cancel)"
+		echo -en "\nEnter your choice: " ; read choice ; echo
 		x=1
-		for a in $ARCH_LIST
-		do
+		for a in $ARCH_LIST ; do
 			[ "$x" = "$choice" ] && selected_arch=$a && break
 			let x++
 		done
 		case $selected_arch in
-			default|"")ok=yes ;;
+			"") echo -n ;;
 			*) ARCH=$selected_arch ;;
 		esac
 	fi
@@ -268,24 +231,38 @@ function select_target_arch() {
 		i*86)    CC_TARBALL=$X86_CC    ;;
 		x86_64)  CC_TARBALL=$X86_64_CC ;;
 		arm*)    CC_TARBALL=$ARM_CC    ;;
-		arm64|aarch64) CC_TARBALL=$ARM64_CC  ;;
+		aarch64) CC_TARBALL=$ARM64_CC  ;;
 	esac
 	if [ -z "$CC_TARBALL" ] ; then
 		exit_error "Cross compiler for $TARGET_ARCH is not available at the moment..."
 	fi
 	#--
 	echo "Arch: $ARCH"
-	case $ARCH in
-		arm) TARGET_TRIPLET=${TARGET_TRIPLET_arm} ;;
-		*)
-			TARGET_TRIPLET=$(echo $CC_TARBALL | cut -d '-' -f 3)
-			TARGET_TRIPLET=${TARGET_TRIPLET}-linux-musl
-			;;
-	esac
+	TARGET_TRIPLET=$(echo $CC_TARBALL | cut -d '-' -f 3)
+	TARGET_TRIPLET=${TARGET_TRIPLET}-linux-musl
+	case $ARCH in arm*) TARGET_TRIPLET=${TARGET_TRIPLET_arm} ;; esac # deja vu
 	sleep 1.5
 }
 
-#--
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+function set_gcc() {
+	if ! which make &>/dev/null ; then
+		fatal_error echo "It looks like development tools are not installed.. stopping"
+	fi
+	if [ "$USE_SYS_GCC" = "no" ] ; then
+		case $ARCH in
+			i?86|x86_64) CROSS_COMPILE=yes ;;
+			*) USE_SYS_GCC=yes ;; # use system gcc in a non-x86 system
+		esac
+	fi
+	if [ "$USE_SYS_GCC" = "yes" ] ; then
+		which gcc &>/dev/null || fatal_error "No gcc, aborting..."
+		echo -e "\nBuilding in: $ARCH"
+		echo -e "\n* Using system gcc\n"
+		sleep 1.5
+	fi
+}
 
 function setup_cross_compiler() {
 	[ "$CROSS_COMPILE" = "no" ] && return
@@ -328,7 +305,7 @@ function setup_cross_compiler() {
 	export XPATH=${PWD}/${CC_DIR} # = cross compiling # see ./func
 }
 
-#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#--------------
 
 function check_bin() {
 	case $init_pkg in
@@ -409,8 +386,6 @@ function generate_initrd() {
 	rm -rf ZZ_initrd-expanded
 	mkdir -p ZZ_initrd-expanded
 	cp -rf 0initrd/* ZZ_initrd-expanded
-	find ZZ_initrd-expanded -type f -name '*MARKER' -delete
-
 	cd ZZ_initrd-expanded
 
 	for PROG in $(get_initrd_progs ${ARCH}) ; do
@@ -459,7 +434,7 @@ if [ "$USE_PREBUILT" = "yes" ] ; then
 	use_prebuilt_binaries
 else
 	V="-v"
-	set_compiler
+	set_gcc
 	select_target_arch
 	setup_cross_compiler
 	build_pkgs
