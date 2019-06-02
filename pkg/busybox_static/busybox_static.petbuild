@@ -6,6 +6,15 @@
 ## http://ewontfix.com/12/
 ## https://github.com/kanj/elfs/issues/4
 ## http://wiki.musl-libc.org/wiki/Building_Busybox
+## http://lists.busybox.net/pipermail/busybox/2013-July/079487.html
+#   CONFIG_EXTRA_COMPAT changes several tools to use
+#    the GNU regex API instead of the POSIX regex API
+#    the GNU API is available with glibc and
+#    uClibc but not musl. (Well, maybe not even uClibc, depending on the
+#    build options; I think it has an option that omits GNU regex...)
+#    - The feature the option provides is not needed for
+#      conformance to POSIX but for extra GNU-version-compatible
+#      functionality beyond POSIX.
 
 if [ -z ${MWD} ] ; then
 	echo "Use build.sh"
@@ -43,6 +52,7 @@ build() {
 	BLACKLIST=$(
 		echo CONFIG_FEATURE_DEVFS '-> tells busybox to look for names like /dev/loop/0 instead of /dev/loop/0'
 		echo CONFIG_DEVFSD '(obsolete)'
+		echo CONFIG_FEATURE_PREFER_APPLETS
 	)
 	#-
 	if [ "$STATIC" = "1" ] ; then
@@ -51,8 +61,6 @@ build() {
 			echo CONFIG_STATIC
 			if [ "$CREATE_PET" ] ; then
 				echo CONFIG_ASH_JOB_CONTROL
-			else
-				echo CONFIG_FEATURE_PREFER_APPLETS
 			fi
 		)
 		DISABLE_KONFIG=$(
@@ -61,12 +69,7 @@ build() {
 			echo FEATURE_VI_REGEX_SEARCH '(needs GNU regexp extensions)'
 			echo FEATURE_MOUNT_NFS       'for linux < 2.6.23 (needs rpc/rpc.h)'
 			echo FEATURE_INETD_RPC       'for linux < 2.6.23 (needs rpc/rpc.h)'
-			echo CONFIG_GREP             'not supported by musl'
-			echo CONFIG_EGREP            'not supported by musl'
-			echo CONFIG_FGREP            'not supported by musl'
 			if [ "$CREATE_PET" ] ; then
-				echo CONFIG_FEATURE_PREFER_APPLETS
-			else
 				echo CONFIG_ASH_JOB_CONTROL
 			fi
 		)
