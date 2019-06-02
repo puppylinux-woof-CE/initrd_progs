@@ -81,7 +81,9 @@ help_msg() {
 	echo "Build static apps in the queue defined in build.conf
 
 Usage:
-  $0 [options]
+  $0 [-arch target] [options]
+
+[-arch target] is only required if cross-compiling [default for x86]
 
 Options:
   -pkg pkg    : compile specific pkg only
@@ -95,7 +97,7 @@ Options:
   -help       : show help and exit
 
   Valid <targets> for -arch:
-      ${ARCH_LIST}
+      ${ARCH_LIST} default
 "
 }
 
@@ -122,7 +124,7 @@ while [ "$1" ] ; do
 		-pet)      export CREATE_PET=1
 			       shift
 			       [ "$1" ] && [[ $1 != -* ]] && BUILD_PKG="$1" && shift ;;
-		-arch)     TARGET_ARCH="$2"    ; shift 2
+		-a|-arch)  TARGET_ARCH="$2"    ; shift 2
 			       [ "$TARGET_ARCH" = "" ] && fatal_error "$0 -arch: Specify a target arch" ;;
 		-specs)    DISTRO_SPECS="$2"   ; shift 2
 			       [ ! -f "$DISTRO_SPECS" ] && fatal_error "$0 -specs: '${DISTRO_SPECS}' is not a regular file" ;;
@@ -178,6 +180,12 @@ function use_prebuilt_binaries() {
 function select_target_arch() {
 	[ "$CROSS_COMPILE" = "no" -a "$USE_PREBUILT" = "no" ] && return
 	[ "$USE_SYS_GCC" = "yes" ] && return
+	if ! [ "$TARGET_ARCH" ] ; then
+		echo -e "\nMust specify target arch: -a <arch>"
+		echo "  <arch> can be one of these: $ARCH_LIST default"
+		echo -e "\nSee also: $0 --help"
+		exit 1
+	fi
 	#-- defaults
 	case $TARGET_ARCH in
 		default) TARGET_ARCH=${ARCH} ;;
@@ -186,36 +194,15 @@ function select_target_arch() {
 		arm*)    TARGET_ARCH=arm     ;;
 	esac
 	VALID_TARGET_ARCH=no
-	if [ "$TARGET_ARCH" != "" ] ; then #no -arch specified
-		for a in $ARCH_LIST ; do
-			if [ "$TARGET_ARCH" = "$a" ] ; then
-				VALID_TARGET_ARCH=yes
-				ARCH=$a
-				break
-			fi
-		done
-		if [ "$VALID_TARGET_ARCH" = "no" ] ; then
-			exit_error "Invalid target arch: $TARGET_ARCH"
+	for a in $ARCH_LIST ; do
+		if [ "$TARGET_ARCH" = "$a" ] ; then
+			VALID_TARGET_ARCH=yes
+			ARCH=$a
+			break
 		fi
-	fi
-	#--
-	if [ "$VALID_TARGET_ARCH" = "no" -a "$PROMPT" = "yes" ] ; then
-		echo -e "\nWe're going to compile apps for the init ram disk"
-		echo -e "Select the arch you want to compile to\n"
-		x=1
-		for i in $ARCH_LIST ; do echo "	${x}) $i" ; let x++ ; done
-		echo
-		echo " * default = ${ARCH} (just press enter to use this - CTRL-C to cancel)"
-		echo -en "\nEnter your choice: " ; read choice ; echo
-		x=1
-		for a in $ARCH_LIST ; do
-			[ "$x" = "$choice" ] && selected_arch=$a && break
-			let x++
-		done
-		case $selected_arch in
-			"") echo -n ;;
-			*) ARCH=$selected_arch ;;
-		esac
+	done
+	if [ "$VALID_TARGET_ARCH" = "no" ] ; then
+		exit_error "Invalid target arch: $TARGET_ARCH"
 	fi
 	# using prebuilt binaries: echo $ARCH and return
 	[ "$USE_PREBUILT" = "yes" ] && echo "Arch: $ARCH" && return
