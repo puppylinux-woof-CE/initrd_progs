@@ -173,7 +173,7 @@ function _make() {
 	if [ "$1" = "" ] ; then #no args
 		if [ -d "$XPATH" ] ; then #musl
 			echo "PATH: $PATH"
-			mkstr="${MKFLG} CC=${XCOMPILER}-gcc LD=${XCOMPILER}-ld AR=${XCOMPILER}-ar RANLIB=${XCOMPILER}-ranlib NM=${XCOMPILER}-nm LDFLAGS=-static"
+			mkstr="${MKFLG} CC=${XCOMPILER}-gcc LD=${XCOMPILER}-ld AR=${XCOMPILER}-ar RANLIB=${XCOMPILER}-ranlib NM=${XCOMPILER}-nm STRIP=${XCOMPILER}-strip LDFLAGS=-static"
 			hl_echo "make $mkstr"
 			make_sh "make $mkstr"
 			make $mkstr
