@@ -14,143 +14,56 @@
 #include <unistd.h>        // getpid() access()
 #include <string.h>        // strstr() etc..
 #include <stdio.h>
-#include <dirent.h>        // opendir(), readdir()
-
-#include <mntent.h>        //mntent
-// disc_is_inserted()
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <linux/cdrom.h>
 
 int debug = 0;
 char *app_name = NULL;
 FILE *outf = NULL;
 int PUPMODE = 5;
 
+#define EVENTMANAGER "/etc/eventmanager"
+int POWERTIMEOUT = 0;
+int RAMSAVEINTERVAL = 0;
+
 #define trace(...) { fprintf (outf, __VA_ARGS__); }
 
 //=============================================================================
 
-int dev_is_mounted(const char *dev) {
-	struct mntent *ent;
-	FILE *fhandle;
-	fhandle = setmntent("/proc/mounts", "r");
-	if (fhandle == NULL) {
-		return 0; /* error */
-	}
-	while (NULL != (ent = getmntent(fhandle))) {
-		//                    /dev/sda2       /mnt/sda2
-		//printf("%s %s\n", ent->mnt_fsname, ent->mnt_dir);
-		if (strcmp(ent->mnt_fsname, dev) == 0) {
-			endmntent(fhandle);
-			return 1; /* ok */
-		}
-	}
-	endmntent(fhandle);
-	return 0; /* error */
+char *get_value(char *buf) {
+	char *s = strchr(buf, '=');
+	s++;
+	if (*s == '\'' || *s == '"') s++;
+	char *p = s;
+	p = strchr(buf, '\'');
+	if (p) p = 0;
+	p = strchr(buf, '"');
+	if (p) p = 0;
+	return s;
 }
 
-int disc_is_inserted(char *device) { /* /dev/sr0 */
-	int fd, status;
-	fd = open(device, O_RDONLY | O_NONBLOCK);
-	if (fd < 0) {
-		return 0; /* err */
-	}
-	// read the drive status info
-	status = ioctl(fd, CDROM_DRIVE_STATUS, CDSL_CURRENT);
-	close(fd);
-	if (status == CDS_DISC_OK) {
-		return 1; /* ok */
-	}
-	return 0; /* err */
-}
-
-//=======================================================================
-//                  FRONTEND_TIMEOUT
-//=======================================================================
-
-int MINUTE=0;
-int CHECK_SR0=1; // check sr0
-
-void frontend_timeout(void) {
-	/* check if lock files are active */
-	if (access("/tmp/frontend_startup_lock", F_OK) != -1) {
+void read_eventmanager(void) {
+	FILE *fp;
+	char buf[256];
+	char *filename = EVENTMANAGER;
+	fp = fopen(filename, "r");
+	if (fp == NULL){
+		if (debug) trace("Could not open file %s\n",filename);
 		return;
 	}
-	struct dirent *pDirent;
-	DIR *pDir;
-	pDir = opendir("/tmp");
-	if (pDir) {
-		while ((pDirent = readdir(pDir)) != NULL) {
-			//printf ("[%s]\n", pDirent->d_name);
-			if (strstr(pDirent->d_name, "frontend_change_processing_")) {
-				closedir (pDir);
-				return;
-			}
-		}
-		closedir (pDir);
-	}
-	//
-	MINUTE += 10;
-	if (MINUTE == 60) {
-		MINUTE=0;
-		//-
-		int ret = system("/usr/local/pup_event/pup_event_timeout60");
-		if (ret == 0) {
-			CHECK_SR0=1; // do check
-		} else {
-			CHECK_SR0=0; // don't check
-		}
-	}
-	if (!CHECK_SR0) {
-		return;
-	}
-	// probe optical drives
-	char *drvname = NULL;
-	char blockdev[30] = "";
-	for (int i = 0; ; i++) {
-		snprintf(blockdev, sizeof(blockdev), "/dev/sr%d", i);
-		drvname = strrchr(blockdev, '/');
-		if (drvname) drvname++;
-		if (access(blockdev, F_OK) == -1) {
-			break;
-		}
-		if (dev_is_mounted(blockdev)) {
-			if (debug) trace("%s is mounted\n", blockdev);
+	while (fgets(buf, 256, fp) != NULL) {
+		if (strstr(buf, "RAMSAVEINTERVAL=")) {
+			RAMSAVEINTERVAL = strtol(get_value(buf), NULL, 10);
 			continue;
-		}
-		char pup_event_drv[50];
-		char drv_uevent[40];
-		snprintf(drv_uevent, sizeof(drv_uevent), "/sys/block/%s/uevent", drvname);
-		snprintf(pup_event_drv, sizeof(pup_event_drv), "/tmp/pup_event_frontend/drive_%s", drvname);
-		if (debug) trace("%s - %s\n", drv_uevent, pup_event_drv);
-		FILE *fp = fopen(drv_uevent, "w");
-		if (fp) {
-			if (disc_is_inserted(blockdev)) {
-				if (debug) trace("disc is inserted\n");
-				if (access(pup_event_drv, F_OK) == -1) {
-					if (debug) trace("add\n");
-					fprintf(fp, "add\n"); // echo "add" > /sys/block/${DRV_NAME}/uevent
-				}
-			} else {
-				if (debug) trace("disc is NOT inseted\n");
-				if (access(pup_event_drv, F_OK) != -1) {
-					if (debug) trace("remove\n");
-					fprintf(fp, "remove\n"); // echo "remove" > /sys/block/${DRV_NAME}/uevent
-				}
-			}
-			fclose(fp);
+		} else if (strstr(buf, "POWERTIMEOUT=")) {
+			POWERTIMEOUT = strtol(get_value(buf), NULL, 10);
 		}
 	}
-	//
+	fclose(fp);
 	return;
 }
 
 //=======================================================================
 //                        MAIN
 //=======================================================================
-
 
 int main(int argc, char **argv) {
 
@@ -180,10 +93,54 @@ int main(int argc, char **argv) {
 	if (debug) trace("PUPMODE %d\n", PUPMODE);
 
 	unlink("/tmp/services/pup_event_timeout");
+	
+	//========================================================
+
+	int MINUTE=0;
+	int SAVECNT = 0;
+	int MOUSECNT = 0;
+	char CURPOS1[20] = "";
+	char CURPOS2[20] = "";
 
 	while (1) {
-		sleep(10);
-		frontend_timeout();
+
+		sleep(60);
+		MINUTE += 1;
+		read_eventmanager();
+
+		if (PUPMODE == 13) {
+			SAVECNT += 1;
+			if ((RAMSAVEINTERVAL > 0) && (SAVECNT >= RAMSAVEINTERVAL)) {
+				if (debug) trace("call save2flash\n");
+				int ret = system("/usr/sbin/save2flash pup_event");
+				if (ret == 0) {
+					if (debug) trace("save2flash ok\n");
+					SAVECNT = 0;
+				}
+			}
+		}
+
+		if (POWERTIMEOUT > 0) { //power-off computer after inactivity.
+			MOUSECNT += 1;
+			FILE *fc = popen("getcurpos", "r");
+			if (fc) {
+				fgets(CURPOS2, sizeof(CURPOS2), fc);
+				CURPOS2[strlen(CURPOS2) - 1] = 0;
+				pclose(fc);
+				if (!*CURPOS1) {
+					strncpy(CURPOS1, CURPOS2, sizeof(CURPOS1));
+				}
+				if (debug) trace("[%s] - [%s]\n", CURPOS1, CURPOS2);
+				if (strcmp(CURPOS1, CURPOS2) != 0) {
+					printf("cursor changed position\n");
+					MOUSECNT = 0;
+				}
+				strncpy(CURPOS1, CURPOS2, sizeof(CURPOS1));
+				if (MOUSECNT >= POWERTIMEOUT) {
+					system("wmpoweroff");
+				}
+			}
+		}
 	}
 
 	return 0;
