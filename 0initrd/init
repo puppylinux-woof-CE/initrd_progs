@@ -94,10 +94,7 @@ P_DEF_FN="$DISTRO_PUPPYSFS"
 if [ $loglevel ] ; then
   LOGLEVEL=$loglevel
 else
-  # If no loglevel is specified, the kernel uses its default loglevel..
-  # but it may be too verbose and flood the screen.
-  # '3' is the standard loglevel.
-  echo '3' > /proc/sys/kernel/printk
+  echo '3' > /proc/sys/kernel/printk # '3' is the standard loglevel.
 fi
 
 #=============================================================
@@ -108,18 +105,13 @@ fsck_func() {
 # "$1" - partition device - ex: /dev/sdb2
 # "$2" - fstype - ex: ext2
  case $2 in
-  ext2|ext3|ext4) fsck_app='e2fsck' ; fsck_OPT='-y' ;;
-  #vfat|msdos) fsck_app='fsck.fat' ; fsck_OPT='-y' ;;
-  #exfat) fsck_app='exfatfsck' ; fsck_OPT='' ;;
+  ext2|ext3|ext4) fsck_app='e2fsck -y' ;;
+  #vfat)  fsck_app='fsck.fat -y'  ;;
+  #exfat) fsck_app='exfatfsck'    ;;
   *) return ;;
  esac
- which "${fsck_app}" || {
-   echo "WARNING: '${fsck_app}' not found"
-   FSCKDPARTS="${FSCKDPARTS}${1}|"
-   return
- }
  if [ "$(echo "$FSCKDPARTS" | grep "${1}|")" = "" ];then
-  ${fsck_app} ${fsck_OPT} ${1} > /dev/console 2>&1 || sleep 3 #so the user has time to read the error msg..
+  ${fsck_app} ${1} > /dev/console 2>&1 || sleep 3 #so the user has time to read the error msg..
   FSCKDPARTS="${FSCKDPARTS}${1}|"
  fi
 }
@@ -308,6 +300,13 @@ setup_loop_sfs() {
 
 load_sfs_file() {
  [ "$LOADMSG" ] && echo -n "$(printf "${L_LOADING_FILE}" "$ONE_BASENAME" "$LOADMSG")" > /dev/console
+ #- handle pfix=copy pfix=ram pfix=nocopy
+ if [ "$PCOPY" = "yes" -o "$PRAMONLY" = "yes" ] ; then
+   COPY2RAM="yes"
+ elif [ "$PNOCOPY" = "yes" ] ; then
+   COPY2RAM="no"
+ fi
+ #-
  if [ "$COPY2RAM" = "" ];then
   COPY2RAM="no"
   #if there's heaps of ram, copy puppy.sfs to a tmpfs...
@@ -316,10 +315,9 @@ load_sfs_file() {
   SIZESFSK=$(($SIZESFSK + 1000)) #some slack.
   MINRAM2CPY=$(($SIZESFSK * 2)) #100222 technosaurus: in case of very big puppies.
   #decide whether to copy .sfs's to ram
-  [ "$PNOCOPY" = "yes" ] || COPYCONTENDER='yes'
-  [ "$PCOPY" = "yes" ] && COPYCONTENDER='yes'
-  [ "$PRAMONLY" = "yes" ] && COPYCONTENDER='yes'
-  [ "$COPYCONTENDER" = "yes" ] && [ $RAMSIZE -gt 400000 ] && [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
+  if [ $RAMSIZE -gt 1048576 ] ; then
+   [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
+  fi
  fi
  if [ "$COPY2RAM" = "yes" ];then
   SIZEZK=$(du -k $ONE_FN | cut -f 1)
@@ -749,7 +747,6 @@ $TRY_PARTS_LAST"
 }
 
 get_part_info() {
- probedisk -hr > /tmp/probedisk.log
  probepart -hr > /tmp/probepart.log
  sed 's%|.*%% ; s%.*/%%' /tmp/probedisk.log > /tmp/ALLDRVS0
  HAVE_PARTS="$(cat /tmp/probepart.log | cut -f 1-2 -d '|' | sed -e 's%/dev/%%')"
@@ -820,8 +817,6 @@ echo -e "\\033[0;34m ***\\033[0;39m"
 [ $psave ] && PSAVE=$psave #ex: sdb4:/puppy/tahr/tahrsave or smark or 49baa82d-8c69:tahrsave
 #list of kernel modules to load, ex: pimod=hid-logitech-dj.ko,kernel/drivers/hid/hid-multitouch.ko 
 [ $pimod ] && PIMOD=$pimod
-#specify partition for Underdog Linux (refer also underdog.lnx).
-[ $underdog ] && UNDERDOG=$underdog
 #[ $pdebug ] && PDEBUG=$pdebug
 PDEBUG=1
 TOTAL_SIZEK_SFS_RAM=0
@@ -1004,11 +999,6 @@ find_onepupdrv "$A_PART" "$A_BP_FN" "$A_DEF_FN" "a"
 #if SAVEPART is not the same as P_PART
 #moved up here to ensure config files are available
 [ "$SAVEPART" ] && ensure_save_mounted
-
-# underdog
-if [ -f /sbin/setup_underdog ] ; then #calls decode_id, ensure_mounted
-  . /sbin/setup_underdog #creates /pup_ud
-fi
 
 #support initmodules.txt
 if [ "$PIMOD" = "" ]; then
@@ -1210,7 +1200,6 @@ echo "PUNIONFS='aufs'"
 echo "DOIMODS='yes'"
 echo "DOMIBS='no'"
 [ -f /sbin/set_plang ] && plang_pupstate #echo
-[ "$UNDERDOG" ] && echo "UNDERDOG='$UNDERDOG'"
 ) > /pup_new/etc/rc.d/PUPSTATE
 
 if [ "$PUPSAVE" ];then
