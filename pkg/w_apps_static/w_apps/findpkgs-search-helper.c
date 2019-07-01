@@ -58,7 +58,6 @@ struct single_list_item_struct
 
 /* A structure with two unions to implement named linked lists,
  * the entries in /tmp/findpkgs_tmp/FINAL_PKGS and
- * store the argument to --petcompiledPTNS
  */
 struct double_list_item_struct
 {
@@ -86,10 +85,6 @@ struct double_list_item_struct *root_item_pkglists_compat;
 /* Stores the argument to --pkgs-specs-table
  */
 char *pkgs_specs_table;
-
-/* Stores the argument to --petcompiledPTNS as a linked list.
- */
-struct double_list_item_struct *root_item_pet_compiled_ptns;
 
 /* Stores the contents of /tmp/findpkgs_tmp/PREFERRED_PKGS
  * and the data to be written to /tmp/findpkgs_tmp/FINAL_PKGS
@@ -617,14 +612,6 @@ int search_func(int search_nr)
 	struct double_list_item_struct *temp1_double_list_item = NULL;
 	struct double_list_item_struct *temp2_double_list_item = NULL;
 
-	struct double_list_item_struct *root_item_compiled_ptns = NULL;
-	struct double_list_item_struct *one_compiled_ptn = NULL;
-	struct double_list_item_struct compat;
-	compat.distro = "*";
-	compat.release = "*";
-	compat.next = NULL;
-	struct double_list_item_struct *compat_pointer = &compat;
-
 	FILE *not_found_log;
 	FILE *pet_log1;
 	FILE *compat_log1;
@@ -799,13 +786,11 @@ int search_func(int search_nr)
 		{
 			root_item_package_lists_order = root_item_packagelists_pet_order;
 			root_item_x_package_lists_order = root_item_packagelists_pet_order;
-			root_item_compiled_ptns = root_item_pet_compiled_ptns;
 		}
 		else
 		{
 			root_item_package_lists_order = root_item_pkglists_compat;
 			root_item_x_package_lists_order = root_item_pkglists_compat;
-			root_item_compiled_ptns = compat_pointer;
 		} // end if [ "$PKGLOC1" = "pet" ];then
 
 
@@ -927,15 +912,6 @@ int search_func(int search_nr)
 				printf("namePTN=%s\ndevnamePTN=%s\ncompiledPTNS=",
 					one_x_binary_part_name, dev_name);
 
-				one_compiled_ptn = root_item_compiled_ptns;
-				while (one_compiled_ptn != NULL)
-				{
-					printf("|%s|%s| ", one_compiled_ptn->distro,
-						one_compiled_ptn->release);
-
-					one_compiled_ptn = one_compiled_ptn->next;
-				}
-
 				printf("\nexcludePTNS=");
 
 				one_binary_excluded = root_item_binary_excluded;
@@ -961,55 +937,95 @@ int search_func(int search_nr)
 			root_item_x_found_specs = NULL;
 			current_item_x_found_specs = &root_item_x_found_specs;
 
-			one_compiled_ptn = root_item_compiled_ptns;
-			// for acompiledPTN in $compiledPTNS
-			while (one_compiled_ptn != NULL)
+			//x
+			// for PKGLIST in $xPACKAGELISTS_ORDER
+			one_x_package_list = root_item_x_package_lists_order;
+			while (one_x_package_list != NULL)
 			{
-				// for PKGLIST in $xPACKAGELISTS_ORDER
-				one_x_package_list = root_item_x_package_lists_order;
-				while (one_x_package_list != NULL)
+				//printf("%s ", one_x_package_list->list_name);
+
+				pkg_exists = 0;
+
+				// search for (namePTN)
+				one_pkglist_item = one_x_package_list->list_item;
+				while (one_pkglist_item != NULL)
 				{
-					//printf("%s ", one_x_package_list->list_name);
+					one_pkglist_entry = one_pkglist_item->pkglist_entry;
 
-					pkg_exists = 0;
+					// if there is a "*" at the end of
+					// one_x_binary_part_name
+					if (look_in_filename == 1)
+					{
+						// compare against pkg_filename
+						if (comp_alias(one_x_binary_part_name,
+							one_pkglist_entry->pkg_filename) != 0)
+								goto next_entry;
 
-					// search for (namePTN)
+						//printf("\n%s\n", one_pkglist_entry->pkg_filename);
+					}
+					else // there it no "*" at the end of
+					{	// one_x_binary_part_name
+
+						// compare against pkg_name_only
+						if (comp_alias(one_x_binary_part_name,
+							one_pkglist_entry->pkg_name_only) != 0)
+								goto next_entry;
+					}
+
+					pkg_exists = 1;
+
+					// check against excluded_items
+					one_binary_excluded = root_item_binary_excluded;
+					while (one_binary_excluded != NULL)
+					{
+						// handle any exclude items based on package name
+						if (comp_alias(one_binary_excluded->name,
+							one_pkglist_entry->pkg_name_only) == 0)
+								goto next_entry;
+
+						// handle any exclude items based on pkg_filename
+						if (comp_alias(one_binary_excluded->name,
+							one_pkglist_entry->pkg_filename) == 0)
+								goto next_entry;
+
+						one_binary_excluded = one_binary_excluded->next;
+					}
+
+					// allocate a new x_found_specs_item
+					*current_item_x_found_specs =
+						(struct double_list_item_struct*)
+							malloc(sizeof(struct double_list_item_struct));
+					one_x_found_spec = *current_item_x_found_specs;
+					one_x_found_spec->next = NULL;
+
+					// save pkglist_entry
+					one_x_found_spec->pkglist_entry = one_pkglist_entry;
+
+					// save name of current packagelist
+					one_x_found_spec->list_name =
+						one_x_package_list->list_name;
+
+					// prepare for next new x_found_specs_item
+					current_item_x_found_specs = &one_x_found_spec->next;
+
+					next_entry:
+					one_pkglist_item = one_pkglist_item->next;
+				}
+
+				if (root_item_x_found_specs == NULL && pkg_exists == 0)
+				{
+					// if no pkglist_entry was found and
+					// no pkglist_entry exists for namePTN regardless of
+					// pkg_compiled_distro and pkg_compiled_release
 					one_pkglist_item = one_x_package_list->list_item;
 					while (one_pkglist_item != NULL)
 					{
 						one_pkglist_entry = one_pkglist_item->pkglist_entry;
 
-						// if there is a "*" at the end of
-						// one_x_binary_part_name
-						if (look_in_filename == 1)
-						{
-							// compare against pkg_filename
-							if (comp_alias(one_x_binary_part_name,
-								one_pkglist_entry->pkg_filename) != 0)
-									goto next_entry;
-
-							//printf("\n%s\n", one_pkglist_entry->pkg_filename);
-						}
-						else // there it no "*" at the end of
-						{	// one_x_binary_part_name
-
-							// compare against pkg_name_only
-							if (comp_alias(one_x_binary_part_name,
-								one_pkglist_entry->pkg_name_only) != 0)
-									goto next_entry;
-						}
-
-						pkg_exists = 1;
-
-						// check pkg_compiled_distro
-						if (comp_alias(one_compiled_ptn->distro,
-							one_pkglist_entry->pkg_compiled_distro) != 0)
-								goto next_entry;
-
-						// check pkg_compiled_release
-						if (comp_alias(one_compiled_ptn->release,
-							one_pkglist_entry->pkg_compiled_release) != 0)
-								goto next_entry;
+						// try looking for dev_name (devnamePTN) instead
+						if (comp_alias(dev_name,
+							one_pkglist_entry->pkg_name_only) != 0)
+								goto next_entry_dev_search;
 
 						// check against excluded_items
 						one_binary_excluded = root_item_binary_excluded;
@@ -1018,12 +1034,12 @@ int search_func(int search_nr)
 							// handle any exclude items based on package name
 							if (comp_alias(one_binary_excluded->name,
 								one_pkglist_entry->pkg_name_only) == 0)
-									goto next_entry;
+									goto next_entry_dev_search;
 
-							// handle any exclude items based on pkg_filename
+						// handle any exclude items based on pkg_filename
 							if (comp_alias(one_binary_excluded->name,
 								one_pkglist_entry->pkg_filename) == 0)
-									goto next_entry;
+									goto next_entry_dev_search;
 
 							one_binary_excluded = one_binary_excluded->next;
 						}
@@ -1031,7 +1047,7 @@ int search_func(int search_nr)
 						// allocate a new x_found_specs_item
 						*current_item_x_found_specs =
 							(struct double_list_item_struct*)
-								malloc(sizeof(struct double_list_item_struct));
+							malloc(sizeof(struct double_list_item_struct));
 						one_x_found_spec = *current_item_x_found_specs;
 						one_x_found_spec->next = NULL;
 
@@ -1043,90 +1059,22 @@ int search_func(int search_nr)
 							one_x_package_list->list_name;
 
 						// prepare for next new x_found_specs_item
-						current_item_x_found_specs = &one_x_found_spec->next;
+						current_item_x_found_specs =
+							&one_x_found_spec->next;
 
 
-						next_entry:
+						next_entry_dev_search:
 						one_pkglist_item = one_pkglist_item->next;
 					}
 
-					if (root_item_x_found_specs == NULL && pkg_exists == 0)
-					{
-						// if no pkglist_entry was found and
-						// no pkglist_entry exists for namePTN regardless of
-						// pkg_compiled_distro and pkg_compiled_release
-						one_pkglist_item = one_x_package_list->list_item;
-						while (one_pkglist_item != NULL)
-						{
-							one_pkglist_entry = one_pkglist_item->pkglist_entry;
+				} // end if root_item_x_found_specs == NULL
 
-							// try looking for dev_name (devnamePTN) instead
-							if (comp_alias(dev_name,
-								one_pkglist_entry->pkg_name_only) != 0)
-									goto next_entry_dev_search;
+				// #pkg(s) found.
+				if (root_item_x_found_specs != NULL)
+					goto pkgs_found;
 
-							// check pkg_compiled_distro
-							if (comp_alias(one_compiled_ptn->distro,
-								one_pkglist_entry->pkg_compiled_distro) != 0)
-									goto next_entry_dev_search;
-
-							// check pkg_compiled_release
-							if (comp_alias(one_compiled_ptn->release,
-								one_pkglist_entry->pkg_compiled_release) != 0)
-									goto next_entry_dev_search;
-
-							// check against excluded_items
-							one_binary_excluded = root_item_binary_excluded;
-							while (one_binary_excluded != NULL)
-							{
-							// handle any exclude items based on package name
-								if (comp_alias(one_binary_excluded->name,
-									one_pkglist_entry->pkg_name_only) == 0)
-										goto next_entry_dev_search;
-
-							// handle any exclude items based on pkg_filename
-								if (comp_alias(one_binary_excluded->name,
-									one_pkglist_entry->pkg_filename) == 0)
-										goto next_entry_dev_search;
-
-								one_binary_excluded = one_binary_excluded->next;
-							}
-
-							// allocate a new x_found_specs_item
-							*current_item_x_found_specs =
-								(struct double_list_item_struct*)
-								malloc(sizeof(struct double_list_item_struct));
-							one_x_found_spec = *current_item_x_found_specs;
-							one_x_found_spec->next = NULL;
-
-							// save pkglist_entry
-							one_x_found_spec->pkglist_entry = one_pkglist_entry;
-
-							// save name of current packagelist
-							one_x_found_spec->list_name =
-								one_x_package_list->list_name;
-
-							// prepare for next new x_found_specs_item
-							current_item_x_found_specs =
-								&one_x_found_spec->next;
-
-
-							next_entry_dev_search:
-							one_pkglist_item = one_pkglist_item->next;
-						}
-
-					} // end if root_item_x_found_specs == NULL
-
-					// #pkg(s) found.
-					if (root_item_x_found_specs != NULL)
-						goto pkgs_found;
-
-
-					one_x_package_list = one_x_package_list->next;
-				} // end for PKGLIST in $xPACKAGELISTS_ORDER
-
-				one_compiled_ptn = one_compiled_ptn->next;
-			} // end for acompiledPTN in $compiledPTNS
+				one_x_package_list = one_x_package_list->next;
+			} // end for PKGLIST in $xPACKAGELISTS_ORDER
 
 			printf("\nWARNING: %s pkg was not found!\n", one_x_binary_part_name);
 
@@ -1551,12 +1499,10 @@ int main(int argc, char **argv)
 
 	root_item_packagelists_pet_order = NULL;
 	root_item_pkglists_compat = NULL;
-	root_item_pet_compiled_ptns = NULL;
 	pkgs_specs_table = NULL;
 
 	current_item_packagelists_pet_order = &root_item_packagelists_pet_order;
 	current_item_pkglists_compat = &root_item_pkglists_compat;
-	current_item_petcompiled_ptns = &root_item_pet_compiled_ptns;
 
 	// process command line args
 	for (i = 1; i < argc; i++)
@@ -1727,75 +1673,9 @@ int main(int argc, char **argv)
 		}
 		else if (strncmp("--petcompiledPTNS", argv[i], 17) == 0)
 		{
-			if (strncmp("--petcompiledPTNS=", argv[i], 18) == 0)
-			{
-				// if the argument is attached,
-				// trim off the "--petcompiledPTNS=" part
-				petcompiled_ptns_buffef = strdup(argv[i]);
-				petcompiled_ptns_pointer = petcompiled_ptns_buffef;
-				strsep(&petcompiled_ptns_pointer, "=");
-
-				if (petcompiled_ptns_pointer == NULL
-					|| *petcompiled_ptns_pointer == '\0')
-				{
-					printf("Error: Missing argument to --petcompiledPTNS\n");
-					return 1;
-				}
-			}
-			else
-			{
-				// otherwise use the next argument
+			if (strncmp("--petcompiledPTNS=", argv[i], 18) == 0) {
+			} else {
 				i++;
-				if (i < argc)
-				{
-					petcompiled_ptns_buffef = strdup(argv[i]);
-					petcompiled_ptns_pointer = petcompiled_ptns_buffef;
-				}
-				else
-				{
-					printf("Error: Missing argument to --petcompiledPTNS\n");
-					return 1;
-				}
-			}
-
-
-			while (petcompiled_ptns_pointer != NULL
-					&& *petcompiled_ptns_pointer != '\0')
-			{
-				// allocate a new petcompiled_ptns item
-				*current_item_petcompiled_ptns =
-					(struct double_list_item_struct*)
-					malloc(sizeof(struct double_list_item_struct));
-				(*current_item_petcompiled_ptns)->next = NULL;
-
-				ptn_pointer = strsep(&petcompiled_ptns_pointer, " ");
-				// patterns start with "|", get rid of it
-				strsep(&ptn_pointer, "|");
-
-				// save the distro name
-				if (ptn_pointer != NULL && *ptn_pointer != '\0')
-				{
-					(*current_item_petcompiled_ptns)->distro =
-						strsep(&ptn_pointer, "|");
-				}
-				else
-				{
-					(*current_item_petcompiled_ptns)->distro = "*";
-				}
-
-				// save the release name
-				if (ptn_pointer != NULL && *ptn_pointer != '\0')
-				{
-					(*current_item_petcompiled_ptns)->release =
-						strsep(&ptn_pointer, "|");
-				}
-				else
-				{
-					(*current_item_petcompiled_ptns)->release = "*";
-				}
-
-				current_item_petcompiled_ptns =
-					&(*current_item_petcompiled_ptns)->next;
 			}
 		}
 		else if (strcmp("--verbose", argv[i]) == 0
@@ -1846,8 +1726,7 @@ int main(int argc, char **argv)
 
 	if (root_item_packagelists_pet_order == NULL
 		|| root_item_pkglists_compat == NULL
-		|| pkgs_specs_table == NULL
-		|| root_item_pet_compiled_ptns == NULL)
+		|| pkgs_specs_table == NULL)
 	{
 		printf("Usage: findpkgs-search-helper \
 --packagelists-pet-order=\"$PACKAGELISTS_PET_ORDER\" \
@@ -1863,19 +1742,6 @@ int main(int argc, char **argv)
 
 
 	free(pkgs_specs_table_buffer);
-
-	// free pet_compiled_ptns
-	temp1_double_list_item = root_item_pet_compiled_ptns;
-	while (temp1_double_list_item != NULL)
-	{
-		//printf("|%s|%s| ", temp1_double_list_item->distro,
-		//					temp1_double_list_item->release);
-
-		temp2_double_list_item = temp1_double_list_item->next;
-		free(temp1_double_list_item);
-		temp1_double_list_item = temp2_double_list_item;
-	}
-	free(petcompiled_ptns_buffef);
 
 	// free preferred_pkgs
 	temp1_single_list_item = root_item_preferred_pkgs;
