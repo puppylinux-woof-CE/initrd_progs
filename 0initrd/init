@@ -22,8 +22,6 @@ L_DUMPING_KERNEL_LOG="Dumping last lines of kernel log..."
 L_ERROR_IS_TOO_CRITICAL="Error is too critical, dropping out to console..."
 L_PAUSING_60_SECONDS="Pausing for 60 seconds..."
 L_LOADING_FILE="Loading the '%s' %s file..." #printf
-L_CANNOT_RESIZE_PUPSAVE="SORRY, cannot resize %s" #printf
-L_INCREASING_PUPSAVE='Increasing %s by %s Kbytes, please wait...' #printf
 L_LOADING_PUPSAVE='Loading savefolder %s [%s]...' #printf
 L_LOADING_PUPSAVE_FILE='Loading savefile %s [%s] (%s)...' #printf
 L_UPGRADE_NO="Backing off, not using personal storage, booting in RAM only, PUPMODE=5..."
@@ -43,16 +41,12 @@ L_ERR_AUFS_SFS_FAILED="aufs mount of %s failed." #printf
 L_ERR_TYPE_PUPSAVE="Type a number to choose which personal file to use:"
 L_DROPPED_TO_INITRD_SHELL="Dropped to initramfs shell. Type 'exec switch' to continue booting Puppy."
 L_SWITCH_ROOT="Performing a 'switch_root' to the layered filesystem..."
-L_CONTINUING_LOADING="...continuing with loading %s..." #printf
 L_FOLDER_MARKED_BAD="Folder %s marked bad." #printf
 L_0_NONE="0  none"
 L_ERROR_FAILED_AUFS_STACK='Failed to create empty aufs stack'
 L_ADDING_MODULE="Adding module %s" #printf
 L_NO_DISTRO_SPECS="No DISTRO_SPECS file found, assuming that personal storage is empty."
 L_DEBUG_SAVE="To save debug info to a partition, type 'debugsave'"
-L_PASSWORD="Password:"
-L_PASSWORD_MSG_1="NOTICE: As you type your password nothing will be displayed on the screen."
-L_PASSWORD_MSG_2="This is a security measure. Just type it in then press ENTER key..."
 L_SFFS_ERROR="ERROR: savefile filesystem is not ext2/3/4"
 
 ##############################################################
@@ -291,71 +285,11 @@ find_onepupdrv() {
  [ "$ONE_FN" = "" -a "${2}" ] && echo "$ONE_PART, $ONE_TRY_FN file not found."
 }
 
-setup_loop_sfs() {
-# "$1" - sfs filename - ex: /mnt/dev_save/puppy/tahr/puppy_tahr_6.0.5.sfs
- ONE_LOOP="$(losetup -f)"
- losetup $LO_OPT $ONE_LOOP ${1}
- [ $? -eq 0 ] || { LO_OPT=""; losetup $LO_OPT $ONE_LOOP ${1}; }
-}
-
-load_sfs_file() {
- [ "$LOADMSG" ] && echo -n "$(printf "${L_LOADING_FILE}" "$ONE_BASENAME" "$LOADMSG")" > /dev/console
- #- handle pfix=copy pfix=ram pfix=nocopy
- if [ "$PCOPY" = "yes" -o "$PRAMONLY" = "yes" ] ; then
-   COPY2RAM="yes"
- elif [ "$PNOCOPY" = "yes" ] ; then
-   COPY2RAM="no"
- fi
- #-
- if [ "$COPY2RAM" = "" ];then
-  COPY2RAM="no"
-  #if there's heaps of ram, copy puppy.sfs to a tmpfs...
-  #v405 fast media plus more than 256MB ram then definitely worth copying to ram...
-  SIZESFSK=$(du -k $ONE_FN | cut -f 1)
-  SIZESFSK=$(($SIZESFSK + 1000)) #some slack.
-  MINRAM2CPY=$(($SIZESFSK * 2)) #100222 technosaurus: in case of very big puppies.
-  #decide whether to copy .sfs's to ram
-  if [ $RAMSIZE -gt 1048576 ] ; then
-   [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
-  fi
- fi
- if [ "$COPY2RAM" = "yes" ];then
-  SIZEZK=$(du -k $ONE_FN | cut -f 1)
-  TFREEK=$(df | grep -m1 ' /mnt/tmpfs' | tr -s ' ' | cut -f 4 -d ' ')
-  if [ $TFREEK -gt $SIZEZK ];then
-   if [ "$ONE_MP" = "" ];then #101101 humongous initrd.
-    mv -f $ONE_FN /mnt/tmpfs/
-   else
-    [ "$LOADMSG" ] && [ "$COPYMSG" ] && echo -en " \\033[1;35m${COPYMSG}\\033[0;39m" > /dev/console #purple.
-    TOTAL_SIZEK_SFS_RAM=$(($TOTAL_SIZEK_SFS_RAM + $SIZEZK))
-    cp -af $ONE_FN /mnt/tmpfs/
-   fi
-   sync
-   setup_loop_sfs /mnt/tmpfs/$ONE_BASENAME
-  else
-   setup_loop_sfs $ONE_FN
-   [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
-  fi
- else
-  setup_loop_sfs $ONE_FN
-  [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
- fi
- SFS_MP="/pup_${ONE_SFX}"
- [ "$ONE_SFX" = "p" ] && SFS_MP="/pup_ro2"
- [ -d "$SFS_MP" ] || mkdir $SFS_MP
- mount -r -t squashfs -o noatime $ONE_LOOP $SFS_MP > /dev/console 2>&1
- STATUS=$?
- [ $STATUS -eq 0 ] && ONE_LAYER="$SFS_MP=rr"
- [ "$LOADMSG" ] && check_status $STATUS
-}
-
 setup_onepupdrv() {
 # "$1" - sfs spec - ex: sdb2,ext4,/pup/mydrv-1.2.3.sfs
 # "$2" - suffix for "pup_" branch directory - ex: a
 # "$3" - prepend after rw layer indicator - ex: p
  ONE_LAYER=""
- [ "$1" ] || return 1
- [ "$2" ] || return 1
  ONE_PART="$(echo "${1}" | cut -f 1 -d ',')"
  [ "$ONE_PART" ] || return 1
  ONE_REL_FN="$(echo "${1}" | cut -f 3 -d ',')"
@@ -375,10 +309,61 @@ setup_onepupdrv() {
  fi
  ONE_FN="${ONE_MP}${ONE_REL_FN}"
  ONE_BASENAME="$(basename $ONE_REL_FN)"
- #validate sfs here
- [ -s "$ONE_FN" ] || return 3 #sfs not Ok
- load_sfs_file
- [ "$ONE_LAYER" ] || return 4 #sfs mount failed
+ if ! [ -s "$ONE_FN" ] ; then
+   return 3 #sfs not Ok - empty file
+ fi
+ # ======= load_sfs_file()
+ echo -n "$(printf "${L_LOADING_FILE}" "$ONE_BASENAME" "$LOADMSG")" > /dev/console
+ #- handle pfix=copy pfix=ram pfix=nocopy
+ if [ "$PCOPY" = "yes" -o "$PRAMONLY" = "yes" ] ; then
+   COPY2RAM="yes"
+ elif [ "$PNOCOPY" = "yes" ] ; then
+   COPY2RAM="no"
+ fi
+ #-
+ if [ "$COPY2RAM" = "" ];then
+  COPY2RAM="no"
+  #if there's heaps of ram, copy puppy.sfs to a tmpfs...
+  SIZESFSK=$(du -k $ONE_FN | cut -f 1)
+  SIZESFSK=$(($SIZESFSK + 1000)) #some slack.
+  MINRAM2CPY=$(($SIZESFSK * 2)) #100222 technosaurus: in case of very big puppies.
+  #decide whether to copy .sfs's to ram
+  if [ $RAMSIZE -gt 1048576 ] ; then
+   [ $RAMSIZE -gt $MINRAM2CPY ] && COPY2RAM="yes"
+  fi
+ fi
+ ONE_LOOP="$(losetup -f)"
+ if [ "$COPY2RAM" = "yes" ];then
+  SIZEZK=$(du -k $ONE_FN | cut -f 1)
+  TFREEK=$(df | grep -m1 ' /mnt/tmpfs' | tr -s ' ' | cut -f 4 -d ' ')
+  if [ $TFREEK -gt $SIZEZK ];then
+   if [ "$ONE_MP" = "" ];then #101101 humongous initrd.
+    mv -f $ONE_FN /mnt/tmpfs/
+   else
+    echo -en " \\033[1;35m${L_COPY_MESSAGE}\\033[0;39m" > /dev/console #purple.
+    TOTAL_SIZEK_SFS_RAM=$(($TOTAL_SIZEK_SFS_RAM + $SIZEZK))
+    cp -af $ONE_FN /mnt/tmpfs/
+   fi
+   sync
+   losetup -r $ONE_LOOP /mnt/tmpfs/$ONE_BASENAME
+  else
+   losetup -r $ONE_LOOP $ONE_FN
+   [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
+  fi
+ else
+  losetup -r $ONE_LOOP $ONE_FN
+  [ "$ONE_PART" != "rootfs" ] && KEEPMOUNTED="${KEEPMOUNTED}${ONE_PART} "
+ fi
+ SFS_MP="/pup_${ONE_SFX}"
+ [ "$ONE_SFX" = "p" ] && SFS_MP="/pup_ro2"
+ [ -d "$SFS_MP" ] || mkdir $SFS_MP
+ mount -r -t squashfs -o noatime $ONE_LOOP $SFS_MP > /dev/console 2>&1
+ STATUS=$? ; check_status $STATUS
+ [ $STATUS -eq 0 ] && ONE_LAYER="$SFS_MP=rr"
+ # ======= end of load_sfs_file()
+ if ! [ "$ONE_LAYER" ] ; then
+   return 4 #sfs mount failed
+ fi
  if [ "$ONE_PREP" ];then
   echo "mount -o remount,add:1:$ONE_LAYER /pup_new" #debug
   mount -o remount,add:1:$ONE_LAYER /pup_new
@@ -392,101 +377,7 @@ setup_onepupdrv() {
  return 0
 }
 
-
-load_ext_file() { #ex: stretchsave.4fs
- SAVE_SZ_FN=""
- RESIZE_FN="$(dirname $SAVE_FN)/pupsaveresizenew.txt"
- #delete following line when resize file location is fixed
- [ -f "$RESIZE_FN" ] || RESIZE_FN="${SAVE_MP}/pupsaveresizenew.txt"
- #-- resize savefile?.. see /usr/sbin/resizepfile.sh
- if [ -f "$RESIZE_FN" ] ; then
-   #(1) resize extX file. see below (2)
-   . $RESIZE_FN #$PUPSAVEFILEX $KILOBIG
-   if [ "$PUPSAVEFILEX" = "$SAVE_REL_FN" ] ; then
-    if [ ! -e /bin/resize2fs ];then
-     echo -en "\\033[1;31m" > /dev/console
-     echo -n "$(printf "${L_CANNOT_RESIZE_PUPSAVE}" "$PUPSAVEFILEX")" > /dev/console #31=red
-     echo -en "\\033[0;39m" > /dev/console
-     rm -f $RESIZE_FN
-    else
-     SAVE_SZ_FN="$SAVE_FN"
-     rm -f $RESIZE_FN
-     echo > /dev/console
-     echo -n "$(printf "${L_INCREASING_PUPSAVE}" "$PUPSAVEFILEX" "$KILOBIG")" >/dev/console
-     dd if=/dev/zero bs=1024 count=$KILOBIG >> $SAVE_SZ_FN
-     sync
-    fi
-   fi
- fi
- #--
- # is the ${DISTRO_FILE_PREFIX}save encrypted?...
- SFFS=$(blkid "$SAVE_FN" | grep -o ' TYPE=".*' | cut -f 2 -d '"')
- #-- 
- if [ "$SFFS" = "crypto_LUKS" ] ; then
-   ln -sv /pup_new/lib/modules/${KERNELVER} /lib/modules/${KERNELVER}
-   modprobe dm-crypt || ERROR_M_DESC="Or maybe the kernel doesn't properly support dm-crypt"
-   modprobe xts || ERROR_M_DESC="Or maybe the kernel doesn't properly support dm-crypt"
-   while [ 1 ]
-   do
-     ONE_LOOP="$(losetup -f)"
-     #mount encrypted savefile
-     echo >/dev/console
-     MYPASS=$(dialog --backtitle "$DISTRODESC" --stdout --title "Password required" --passwordbox "$L_PASSWORD_MSG_1 $L_PASSWORD_MSG_2" 0 0 2>/dev/console) ; clear
-     losetup $ONE_LOOP $SAVE_FN
-     echo -n "$MYPASS" | cryptsetup luksOpen -v $ONE_LOOP savefile -
-     if [ $? -ne 0 ] ; then
-       cryptsetup luksClose savefile
-       losetup -d $ONE_LOOP
-       dialog --backtitle "$DISTRODESC" --title "Wrong password" --ok-label "Retry" --yes-label "Retry" \
-       --cancel-label "Drop to console" --no-label "Drop to console" \
-        --extra-button --extra-label "Reboot" --yesno "You entered a wrong password (most likely). $ERROR_M_DESC"  0 0 &>/dev/console
-       case $? in
-          0) continue ;;
-          3) reboot ;;
-          *) exec /bin/sh >/dev/console 2>&1 ;;
-        esac
-     fi
-     ONE_LOOP_PREV=$ONE_LOOP
-     ONE_LOOP=/dev/mapper/savefile #hack
-     SFFS=ext4
-     break
-   done
- else # unencrypted savefile
-   if echo "$SAVE_FN" | grep -q '_crypt' ; then
-     dialog --backtitle "$DISTRODESC" --msgbox "Your savefile name contains: *_crypt*. It's probably an old cryptoloop savefile. No longer supported. Will not use it. However you can open ${PUPSAVE##*/} to see its contents by clicking on it (filemnt)" 0 0 &>/dev/console
-     echo 'Warning: old cryptoloop savefile... setting PUPSAVE=""' #debug
-     FLAG_NO_TIMEOUT=1
-     PUPSAVE=""
-     return
-   fi
-   ONE_LOOP="$(losetup -f)"
-   losetup $ONE_LOOP $SAVE_FN
- fi
- #--
- if [ "$PFSCK" = "yes" ] ; then
-   echo "" > /dev/console
-   fsck_func "$ONE_LOOP" "$SFFS"
- fi
- #--
- if [ "$SAVE_SZ_FN" ] ; then
-   #(2) resize extX filesystem - fill extX file. see above (1)
-   [ "$PFSCK" != "yes" ] && e2fsck -y "$ONE_LOOP" #debug
-   resize2fs -pf "$ONE_LOOP" #no size, will fill all of file.
-   echo -n "$(printf "${L_CONTINUING_LOADING}" "$PUPSAVEFILE")" > /dev/console
-   sync
- fi
- #--
- [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
- echo "mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER" #debug
- mount -t $SFFS -o noatime $ONE_LOOP $SAVE_LAYER
- if [ $? -ne 0 ] ; then
-   echo 'Warning: setting PUPSAVE=""' #debug
-   PUPSAVE=""
- fi
-}
-
-
-setup_save_file(){
+setup_psave(){ # setup savefile or savefolder
  SAVE_REL_FN="$(echo "$PUPSAVE" | cut -f 3 -d ',')"
  if [ -f "${SAVE_MP}${SAVE_REL_FN}" ];then #savefile
   PUPSAVE_SIZE="$(fx_format_bytes $(stat -c %s "${SAVE_MP}${SAVE_REL_FN}"))"
@@ -498,7 +389,17 @@ setup_save_file(){
  SAVE_FN="${SAVE_MP}${SAVE_REL_FN}"
  if [ -f "$SAVE_FN" ];then #savefile. ex: stretchsave.4fs
   echo "--SAVEFILE-- $SAVE_FN" #debug
-  load_ext_file
+  /sbin/load_ext_file "$SAVE_FN" "$SAVE_MP" #reads $PFSCK
+  if [ -f /tmp/savefile_loop ] ; then
+    . /tmp/savefile_loop # $SAVEFILE_LOOP $SFFS
+    [ -d "$SAVE_LAYER" ] || mkdir $SAVE_LAYER
+    echo "mount -t $SFFS -o noatime $SAVEFILE_LOOP $SAVE_LAYER" #debug
+    mount -t $SFFS -o noatime $SAVEFILE_LOOP $SAVE_LAYER
+    [ $? -ne 0 ] && PUPSAVE=""
+  else # load_ext_file failed
+    FLAG_NO_TIMEOUT=1
+    PUPSAVE=""
+  fi
  elif [ -d "$SAVE_FN" ];then #savefolder
   echo "--SAVEFOLDER-- $SAVE_FN" #debug
   ln -sv "$SAVE_FN" "$SAVE_LAYER"
@@ -517,8 +418,8 @@ setup_save_file(){
   if [ "$PCLEAN" != "yes" -a -f "$SAVE_LAYER/initrd/DISTRO_SPECS" ];then
     validate_pupsave_upgrade /DISTRO_SPECS $SAVE_LAYER/initrd/DISTRO_SPECS
     case $? in
-      0) PCLEAN="yes" ;; #(dialog) perform upgrade
-      1) PUPSAVE=""   ;; #(dialog) do not perform upgrade
+      0) PCLEAN="yes" ;; # perform upgrade
+      1) PUPSAVE=""   ;; # do not perform upgrade
     esac
   fi
   if [ "$PCLEAN" = "yes" ];then
@@ -642,34 +543,6 @@ copy_folders() { #SAVE_LAYER=/pup_ro1
  done
  sync
  echo -e "--------------------\n" # debug
-}
-
-prepend_dir() { #SAVE_LAYER=/pup_ro1
- rm -rf ${SAVE_LAYER}/tmp #in case last boot was pupmode=12
- #adjust stack
- echo "mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new" #debug
- mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new #ro+wh = Readonly branch and it has/might have whiteouts on it
- if [ $? -eq 0 ];then
-  [ $PUPMODE -ne 77 ] && KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-  [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
- else
-  printf "${L_ADDING_SAVE_LAYER_FAILED}\n" "$SAVE_LAYER"
- fi
-}
-
-replace_dir() { #SAVE_LAYER=/pup_rw
- #setup empty /tmp on tmpfs for in stack
- rm -rf ${SAVE_LAYER}/tmp
- #adjust stack
- echo "mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new" #debug
- mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
- if [ $? -eq 0 ];then
-  rm -rf /mnt/tmpfs/pup_rw
-  KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
-  [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
- else
-  printf "${L_ADDING_SAVE_LAYER_FAILED}\n" "$SAVE_LAYER"
- fi
 }
 
 set_fs_linux() {
@@ -845,6 +718,8 @@ if [ "$pfix" ];then
  done
 fi
 
+export PFSCK # read by /sbin/load_ext_file
+
 [ "$PRAMONLY" != "yes" ] && [ -f /BOOT_SPECS ] && . /BOOT_SPECS
 
 [ "$TZ" ] && export TZ
@@ -878,7 +753,6 @@ PUP_SAVES=""
 KEEPMOUNTED=""
 FSCKDPARTS=""
 BLKIDOUT=""
-LO_OPT="-r"
 
 [ "$PDEBUG" ] && echo "1: PDRV=$PDRV P_BP_ID=$P_BP_ID P_BP_FN=$P_BP_FN"
 
@@ -955,7 +829,6 @@ mount -t aufs -o udba=reval,diropq=w,br=/mnt/tmpfs/pup_rw=rw,xino=/mnt/tmpfs/.au
 NEWUNIONRECORD=""
 COPY2RAM=""
 
-COPYMSG="${L_COPY_MESSAGE}" #purple
 LOADMSG="${L_LOAD_MESSAGE}"
 setup_onepupdrv "$PDRV" "p"
 STATUS=$?
@@ -1143,17 +1016,40 @@ fi
 
 #load savefile if required, then setup stack
 case $PUPMODE in
- 77) #load folders
-  copy_folders #to /pup_ro1 (part of the tmpfs)
-  prepend_dir  #prepend ro1
- ;;
- 13) #prepend ro1
-  setup_save_file
-  [ "$PUPSAVE" ] && prepend_dir
+ 77|13)
+  [ $PUPMODE -eq 77 ] && copy_folders #to /pup_ro1 (part of the tmpfs)
+  [ $PUPMODE -eq 13 ] && setup_psave
+  if [ "$PUPSAVE" ] ; then
+    #prepend ro1 - #SAVE_LAYER=/pup_ro1
+    rm -rf ${SAVE_LAYER}/tmp #in case last boot was pupmode=12
+    #adjust stack
+    echo "mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new" #debug
+    mount -o remount,add:1:${SAVE_LAYER}=ro+wh /pup_new #ro+wh = Readonly branch and it has/might have whiteouts on it
+    if [ $? -eq 0 ];then
+      [ $PUPMODE -ne 77 ] && KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+      [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+    else
+      printf "${L_ADDING_SAVE_LAYER_FAILED}\n" "$SAVE_LAYER"
+    fi
+  fi
  ;;
  12) #replace rw
-  setup_save_file
-  [ "$PUPSAVE" ] && replace_dir
+  setup_psave
+  if [ "$PUPSAVE" ] ; then
+    #SAVE_LAYER=/pup_rw
+    #setup empty /tmp on tmpfs for in stack
+    rm -rf ${SAVE_LAYER}/tmp
+    #adjust stack
+    echo "mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new" #debug
+    mount -o remount,prepend:${SAVE_LAYER}=rw,mod:/mnt/tmpfs/pup_rw=ro,del:/mnt/tmpfs/pup_rw /pup_new
+    if [ $? -eq 0 ];then
+      rm -rf /mnt/tmpfs/pup_rw
+      KEEPMOUNTED="${KEEPMOUNTED}${SAVEPART} "
+      [ "$SAVE_NAME" ] && NEWUNIONRECORD="$SAVE_NAME $NEWUNIONRECORD"
+    else
+      printf "${L_ADDING_SAVE_LAYER_FAILED}\n" "$SAVE_LAYER"
+    fi
+  fi
  ;;
  5)
   SAVE_MP=""
