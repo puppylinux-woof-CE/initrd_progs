@@ -1,8 +1,11 @@
 #!/bin/bash
 # compile musl static apps
 
+#set -x
 . ./build.conf
-[ "$BUILD_TARBALL" ] && . ./build.tarball.conf
+if [ "$BUILD_TARBALL" ] ; then
+	. ./${BUILD_TARBALL}
+fi
 export MKFLG
 export MWD=`pwd`
 export TARGET_TRIPLET=
@@ -44,11 +47,16 @@ function get_initrd_progs() {
 	eval echo \$$var \$${var}_${arch} #ex: $PACKAGES $PACKAGES_x86, $INITRD_PROGS $INITRD_PROGS_x86
 }
 
+# build.sh tarball [build.conf] [arch]
 case "$1" in release|tarball) #this contains the $PREBUILT_BINARIES
 	echo "If you made changes then don't forget to remove all 00_* directories first"
-	export BUILD_TARBALL=1
+	shift
+	if [ -f "$1" ] ; then
+		export BUILD_TARBALL=$1
+		shift
+	fi
 	sleep 4
-	if [ -n "$2" ]; then
+	if [ -n "$1" ]; then
 		$0 -nord -auto -arch $2
 		pkgx=initrd_progs-${2}-$(date "+%Y%m%d")-static.tar.xz
 	else
