@@ -14,7 +14,7 @@ CAT=BuildingBlock
 CWD=`pwd`
 
 #libfuse_ver=3.0.0 #can't mount - segfaults
-libfuse_ver=2.9.7
+libfuse_ver=2.9.9 #2019-jan-04 
 
 build_libfuse() {
 	extract fuse-${libfuse_ver}.tar.gz

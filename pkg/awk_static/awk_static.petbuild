@@ -9,7 +9,7 @@
 URL=http://ftp.gnu.org/gnu/gawk
 SRC=gawk
 PKG=awk_static
-VER=4.2.0
+VER=4.2.1 #latest is 5.0.1 -- error compiling
 COMP=tar.xz
 DESC=""
 DEPS=
