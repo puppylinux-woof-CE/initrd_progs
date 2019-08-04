@@ -25,8 +25,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#define BUF_SIZE (1024 * 1024)
-#define MAX_PKGS (60000)
+#define BUF_SIZE (1280 * 1280)
+#define MAX_PKGS (70000)
 #define VAL_SIZE (16 * 1024)
 #define REV_SIZE (32)
 
