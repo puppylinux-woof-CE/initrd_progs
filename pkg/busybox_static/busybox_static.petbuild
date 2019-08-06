@@ -29,6 +29,7 @@ URL=http://busybox.net/downloads
 PKG=busybox_static
 SRC=busybox
 VER=1.31.0
+REV=2
 COMP=tar.bz2
 DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
 DEPS=
@@ -116,15 +117,17 @@ build() {
 		rm -rf _install/sbin
 		rm -rf _install/usr
 		sync
-		mv _install ${SRC}-${VER}-${A}_musl_static
-		dir2pet -x -s -n ${SRC}-${VER}-${A}_musl_static
+		PKGNAME=${SRC}-${VER}-${A}_musl_static-${REV}
+		rm -rf ${PKGNAME}
+		mv _install ${PKGNAME}
+		dir2pet -x -s -n ${PKGNAME}
 		mkdir -p ${MWD}/00_${ARCH}/
-		if [ -f ${SRC}-${VER}-${A}_musl_static.pet ] ; then
-			mv -fv ${SRC}-${VER}-${A}_musl_static.pet ${MWD}/00_${ARCH}/ || exit
-		elif [ -f ${SRC}-${VER}-${A}_musl_static.pet.tar.gz ] ; then
-			mv -fv ${SRC}-${VER}-${A}_musl_static.pet.tar.gz ${MWD}/00_${ARCH}/ || exit
-		elif [ -f ${SRC}-${VER}-${A}_musl_static.pet.tar.xz ] ; then
-			mv -fv ${SRC}-${VER}-${A}_musl_static.pet.tar.xz ${MWD}/00_${ARCH}/ || exit
+		if [ -f ${PKGNAME}.pet ] ; then
+			mv -fv ${PKGNAME}.pet ${MWD}/00_${ARCH}/ || exit
+		elif [ -f ${PKGNAME}.pet.tar.gz ] ; then
+			mv -fv ${PKGNAME}.pet.tar.gz ${MWD}/00_${ARCH}/ || exit
+		elif [ -f ${PKGNAME}.pet.tar.xz ] ; then
+			mv -fv ${PKGNAME}.pet.tar.xz ${MWD}/00_${ARCH}/ || exit
 		else
 			echo error busybox pkg not created
 			exit
