@@ -178,7 +178,7 @@ do
 		(
 			date "+%Y-%m-%d"
 			echo
-			ls -d *-* | grep -v cross-
+			ls -d *-* | grep -vE 'cross-|make-cc'
 		) > ${INSTALL_DIR}/specs
 		echo "Creating $CC_PKG"
 		tar -Jcf "$CC_PKG" "$CC_DIR"
