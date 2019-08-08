@@ -5,7 +5,7 @@
 URL=https://ftp.gnu.org/pub/gnu/nano
 SRC=nano
 PKG=nano_static
-VER=2.9.3
+VER=4.3
 COMP=tar.xz
 DESC="nano text editor"
 ncurses=

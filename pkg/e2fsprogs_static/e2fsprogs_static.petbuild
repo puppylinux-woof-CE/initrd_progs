@@ -6,7 +6,7 @@
 
 # GOES TO INITRD
 
-VER=1.45.2
+VER=1.45.3 # 15-Jul-2019
 #URL=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v${VER}
 URL=https://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v${VER}
 SRC=e2fsprogs

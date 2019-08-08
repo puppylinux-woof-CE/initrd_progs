@@ -9,7 +9,7 @@
 URL=http://ftp.gnu.org/gnu/findutils
 SRC=findutils
 PKG=findutils_static
-VER=4.6.0
+VER=4.6.0 #2015-12-28
 COMP=tar.gz
 DESC=""
 DEPS=

@@ -23,7 +23,6 @@ build() {
 	done
 	opts="--prefix=/usr
 --disable-nls
---disable-net-redirections
 --enable-static-link
 --without-bash-malloc" #--disable-readline
 	_configure
