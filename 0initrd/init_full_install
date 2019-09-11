@@ -13,7 +13,16 @@ export LANG=C
 PATH="/bin:/sbin"
 export INIT_SCRIPT=1
 
-[ $loglevel ] && LOGLEVEL=$loglevel || echo '3' > /proc/sys/kernel/printk
+for i in $(cat /proc/cmdline) ; do
+	case $i in
+		root=*) ROOT=${i#root=} ;;
+		loglevel=*) LOGLEVEL=${i##*=}  ;;
+	esac
+done
+
+if [ ! "$LOGLEVEL" ] ; then
+  echo '3' > /proc/sys/kernel/printk # '3' is the standard loglevel.
+fi
 clear #clear the screen.
 
 fatal_error() { # "$1" - message - ex: "Something failed"
@@ -41,10 +50,8 @@ case $(uname -m) in
 esac
 
 # process PDRV
-if [ ! "$PDRV" ] ; then
-	for i in $(cat /proc/cmdline) ; do
-		case $i in "root="*) PDRV=${i#root=} ;; esac
-	done
+if [ ! "$PDRV" ] && [ "$ROOT" ] ; then
+	PDRV=${ROOT}
 fi
 case $PDRV in
 	UUID=*) PDRV=${PDRV#UUID=} ;; #remove leading UUID=
