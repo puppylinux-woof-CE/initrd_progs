@@ -573,14 +573,14 @@ int search_func(int search_nr)
 	int close_error = 0;
 
 	char *one_name_ptn = NULL;
-	char *name_dev = NULL;
-	char *name_doc = NULL;
-	char *name_nls = NULL;
+	char name_dev[256] = "";
+	char name_doc[256] = "";
+	char name_nls[256] = "";
 
 	struct single_list_item_struct *root_item_x_binary_part_names = NULL;
 	char *one_x_binary_part_name = NULL;
 	struct single_list_item_struct **current_item_x_binary_part_names = NULL;
-	char *dev_name = NULL;
+	char dev_name[256] = "";
 
 	struct single_list_item_struct *root_item_binary_excluded = NULL;
 	struct single_list_item_struct *one_binary_excluded = NULL;
@@ -853,8 +853,7 @@ int search_func(int search_nr)
 						*current_item_x_package_lists_order =
 							(struct double_list_item_struct*)
 								malloc(sizeof(struct double_list_item_struct));
-						one_x_package_list =
-							*current_item_x_package_lists_order;
+						one_x_package_list = *current_item_x_package_lists_order;
 						one_x_package_list->next = NULL;
 
 						one_x_package_list->list_name =
@@ -901,9 +900,7 @@ int search_func(int search_nr)
 			}
 
 			// set dev_name (devnamePTN)
-			dev_name = malloc(strlen(one_x_binary_part_name) + 5);
-			strcpy(dev_name, one_x_binary_part_name);
-			strcat(dev_name, "_DEV");
+			snprintf(dev_name, sizeof(dev_name), one_x_binary_part_name, "_DEV");
 
 			// if [ "$DEBUG" ] ; then
 			if (is_debug == 1)
@@ -913,22 +910,18 @@ int search_func(int search_nr)
 					one_x_binary_part_name, dev_name);
 
 				printf("\nexcludePTNS=");
-
 				one_binary_excluded = root_item_binary_excluded;
 				while (one_binary_excluded != NULL)
 				{
 					printf("%s ", one_binary_excluded->name);
-
 					one_binary_excluded = one_binary_excluded->next;
 				}
 
 				printf("\nxPACKAGELISTS_ORDER=");
-
 				one_x_package_list = root_item_x_package_lists_order;
 				while (one_x_package_list != NULL)
 				{
 					printf("%s ", one_x_package_list->list_name);
-
 					one_x_package_list = one_x_package_list->next;
 				}
 				printf("\n");
@@ -1166,25 +1159,17 @@ int search_func(int search_nr)
 						}
 					} // end if (*pkg_location_field == '\0')
 
-
 					// set name_dev (devnamePTN)
-					name_dev = malloc(strlen(
-									x_found_specs_pkglist->pkg_name_only) + 5);
-					strcpy(name_dev, x_found_specs_pkglist->pkg_name_only);
-					strcat(name_dev, "_DEV");
+					snprintf(name_dev, sizeof(name_dev),
+						x_found_specs_pkglist->pkg_name_only, "_DEV");
 
 					// set name_doc (docnamePTN)
-					name_doc = malloc(strlen(
-									x_found_specs_pkglist->pkg_name_only) + 5);
-					strcpy(name_doc, x_found_specs_pkglist->pkg_name_only);
-					strcat(name_doc, "_DOC");
+					snprintf(name_doc, sizeof(name_doc),
+						x_found_specs_pkglist->pkg_name_only, "_DOC");
 
 					// set name_nls (nlsnamePTN)
-					name_nls = malloc(strlen(
-									x_found_specs_pkglist->pkg_name_only) + 5);
-					strcpy(name_nls, x_found_specs_pkglist->pkg_name_only);
-					strcat(name_nls, "_NLS");
-
+					snprintf(name_nls, sizeof(name_nls),
+						x_found_specs_pkglist->pkg_name_only, "_NLS");
 
 					// find REPODBFILE
 
@@ -1365,9 +1350,6 @@ int search_func(int search_nr)
 						one_pkglist_item = one_pkglist_item->next;
 					} // end while (one_pkglist_item != NULL)
 
-					free(name_dev);
-					free(name_doc);
-					free(name_nls);
 				} // end else if (search_nr == 2)
 
 				one_x_found_spec = one_x_found_spec->next;
@@ -1382,8 +1364,6 @@ int search_func(int search_nr)
 				temp1_double_list_item = temp2_double_list_item;
 			}
 			root_item_x_found_specs = NULL;
-
-			free(dev_name);
 
 			current_item_x_binary_part_names =
 				&(*current_item_x_binary_part_names)->next;
