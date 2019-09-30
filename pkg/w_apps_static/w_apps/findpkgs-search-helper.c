@@ -659,6 +659,9 @@ int search_func(int search_nr)
 
 		one_pkg_spec_pointer = one_pkg_spec;
 
+		// yes|cmake|cmake,cxxlibs,libarchive,libidn|exe>dev,dev,doc,nls|pet:tahr
+		//  1    2                       3                    4           5
+
 		// read YESNO field
 		yes_no = strsep(&one_pkg_spec_pointer, "|");
 		if (strcasecmp("yes", yes_no) != 0)
@@ -778,6 +781,14 @@ int search_func(int search_nr)
 			else
 			{ // PKGLOC2 was not specified
 				pkg_loc2_pointer = NULL;
+			}
+			if ((strcmp("pet", pkg_loc1_pointer) != 0) && (strcmp("compat", pkg_loc1_pointer) != 0))
+			{
+				// syntax error, handle gracefully
+				if (!*binary_part_names)
+					pkg_loc1_pointer = "pet";
+				else
+					pkg_loc1_pointer = "compat";
 			}
 		}
 
