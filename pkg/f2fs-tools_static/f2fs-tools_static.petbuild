@@ -1,0 +1,85 @@
+#!/bin/sh
+# GOES TO INITRD
+
+. ../../func
+
+if [ ! "$XPATH" ] ; then
+	echo Please run build.sh
+	exit
+fi
+TOOLCHAIN_DIR=$(echo ${XPATH}/*linux-musl*)
+if ! [ -d "$TOOLCHAIN_DIR" ] ; then
+	TOOLCHAIN_DIR=${XPATH}
+fi
+
+libuuid_ver=1.0.3
+
+VER=1.13.0
+URL=https://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs-tools.git/snapshot
+SRC=f2fs-tools
+PKG=f2fs-tools_static
+COMP=tar.gz
+DESC=""
+DEPS=
+CAT=BuildingBlock
+CWD=`pwd`
+
+build_libuuid() {
+	if [ -f ${TOOLCHAIN_DIR}/lib/libuuid.a ] ; then
+		return 0
+	fi
+	extract libuuid-${libuuid_ver}.tar.gz
+	cd libuuid-${libuuid_ver}
+	opts="--prefix=${TOOLCHAIN_DIR}" # cross compiler path
+	_configure
+	_make
+	_make install
+	rv=$?
+	cd ..
+	[ $rv -eq 0 ] && rm -rf libuuid-${libuuid_ver}
+	return $rv
+}
+
+build() {
+	build_libuuid || exit 1
+	cd ${SRC}-${VER}
+	if ! [ -f ./configure ] ; then
+		./autogen.sh
+	fi
+	opts="--prefix=/usr
+--enable-static
+--disable-shared
+--without-selinux
+--without-blkid
+"
+	_configure
+	_make ${MKFLG} LDFLAGS="-all-static"
+	abort_if_file_not_found fsck/fsck.f2fs
+	ln -s fsck.f2fs fsck/resize.f2fs
+	ln -s fsck.f2fs fsck/defrag.f2fs
+	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install fsck/fsck.f2fs $CWD/${PKG}-${VER}-${ARCH}/bin
+	cp -a fsck/resize.f2fs $CWD/${PKG}-${VER}-${ARCH}/bin
+	cp -a fsck/defrag.f2fs $CWD/${PKG}-${VER}-${ARCH}/bin
+	cd -
+}
+
+package() {
+	# add this recipe
+	install -d -m 0755 ./${PKG}-${VER}-${ARCH}/build
+	cat ${PKG}.petbuild > ./${PKG}-${VER}-${ARCH}/build/$PKG-build-recipe
+	# move, don't package
+	cp -a --remove-destination ./${PKG}-${VER}-${ARCH}/* ../../00_${ARCH}
+	rm -r ${SRC}-${VER}
+	rm -r ${PKG}-${VER}-${ARCH}
+	echo "moved to initrd"
+	echo "done!"
+}
+
+# main
+retrieve https://sourceforge.net/projects/libuuid/files/libuuid-${libuuid_ver}.tar.gz
+retrieve ${SRC}-${VER}.${COMP}
+[ "$DLD_ONLY" = "yes" ] && exit
+extract ${SRC}-${VER}.${COMP}
+build
+package

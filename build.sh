@@ -309,6 +309,7 @@ function check_bin() {
 		dosfstools_static) static_bins='fsck.fat' ;;
 		e2fsprogs_static) static_bins='e2fsck resize2fs' ;;
 		exfat-utils_static) static_bins='exfatfsck' ;;
+		f2fs-tools_static) static_bins='fsck.f2fs'  ;;
 		fuse-exfat_static) static_bins='mount.exfat-fuse' ;;
 		findutils_static) static_bins='find' ;;
 		util-linux_static) static_bins='losetup' ;;
