@@ -298,6 +298,11 @@ function setup_cross_compiler() {
 	echo -e "\nUsing cross compiler\n"
 	export OVERRIDE_ARCH=${ARCH}  # = cross compiling # see ./func
 	export XPATH=${PWD}/${CC_DIR} # = cross compiling # see ./func
+	CC_INSTALL_DIR=$(echo ${XPATH}/*linux-musl*)
+	if ! [ -d "$CC_INSTALL_DIR" ] ; then
+		CC_INSTALL_DIR=${XPATH}
+	fi
+	export CC_INSTALL_DIR
 }
 
 #--------------

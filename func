@@ -17,7 +17,9 @@ fi
 
 function set_arch() {
 	ARCH=`uname -m`
-	[ "$OVERRIDE_ARCH" ] && ARCH=${OVERRIDE_ARCH}
+	if [ "$OVERRIDE_ARCH" ] ; then
+		ARCH=${OVERRIDE_ARCH}
+	fi
 	case $ARCH in
 		*64) LIBDIR=lib64 ;;
 		*) LIBDIR=lib ;;
@@ -29,8 +31,16 @@ function set_arch() {
 }
 set_arch
 
+#if [ -d "${CC_INSTALL_DIR}" ] ; then
+#	export PATH=${CC_INSTALL_DIR}/bin:$PATH # _configure _make _install
+#fi
+
 if [ -d "$XPATH" ] ; then #set in build.sh
 	export PATH=${XPATH}/bin:$PATH # _configure _make _install
+	export LD_LIBRARY_PATH=${XPATH}/lib:${LD_LIBRARY_PATH}
+	export PKG_CONFIG_PATH=${XPATH}/lib/pkgconfig
+	export C_INCLUDE_PATH=${XPATH}/include
+	export CPLUS_INCLUDE_PATH=${XPATH}/include
 fi
 
 #---------------------------------------------------------

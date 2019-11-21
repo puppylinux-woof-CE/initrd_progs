@@ -1,51 +1,21 @@
 #!/bin/sh
 
 . ../../func
+. ../libs.sh # ncurses
 
 URL=http://invisible-island.net/datafiles/release
 SRC=dialog
 PKG=dialog_static
-VER=1.3-20190211
+VER=1.3-20191110
 COMP=tar.gz
 DESC="Displays user-friendly dialog boxes from shell scripts"
-ncurses=
 CAT=BuildingBlock
 CWD=`pwd`
 
-ncurses_ver=6.1 #2018-01-27
-
-build_ncurses() {
-	extract ncurses-${ncurses_ver}.tar.gz
-	cd ncurses-${ncurses_ver}
-	opts="--prefix=${ncurses_dir}
---without-manpages
---without-progs
---without-tests
---disable-db-install
---without-ada
---without-gpm
---without-shared
---without-debug
---without-develop
---without-cxx
---without-cxx-binding
---disable-big-core
---disable-big-strings"
-	_configure
-	_make ${MKFLG} LDFLAGS=-static CFLAGS=\"$(_cflags)\"
-	_make install
-	cd ..
-}
-
 build() {
-	ncurses_dir=${PWD}/ncurses
-	build_ncurses
-	export CFLAGS=$(${ncurses_dir}/bin/ncurses6-config --cflags)
-	export LIBS=$(${ncurses_dir}/bin/ncurses6-config --libs)
-	export NCURSESW_CFLAGS=$CFLAGS
-	export NCURSESW_LIBS=$LIBS
-	export NCURSES_CFLAGS=$LIBS
-	export NCURSES_LIBS=$LIBS
+	ncurses_build
+	export CFLAGS=$NC_CFLAGS # ncurses_build
+	export LIBS=$NC_LIBS     # ncurses_build
 	cd ${SRC}-${VER}
 	opts="--prefix=/usr --sysconfdir=/etc"
 	_configure
@@ -73,7 +43,7 @@ package() {
 }
 
 # main
-retrieve https://ftp.gnu.org/pub/gnu/ncurses/ncurses-${ncurses_ver}.tar.gz
+ncurses_download
 retrieve ${SRC}.${COMP} ${SRC}-${VER}.${COMP}
 [ "$DLD_ONLY" = "yes" ] && exit
 extract ${SRC}-${VER}.${COMP}

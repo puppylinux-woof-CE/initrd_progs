@@ -3,30 +3,26 @@
 . ../../func
 . ../libs.sh # ncurses
 
-URL=https://ftp.gnu.org/pub/gnu/nano
-SRC=nano
-PKG=nano_static
-VER=4.3
-COMP=tar.xz
-DESC="nano text editor"
+VER=2.2.0
+URL=http://hisham.hm/htop/releases/${VER}
+SRC=htop
+PKG=htop_static
+COMP=tar.gz
+DESC=""
 ncurses=
 CAT=BuildingBlock
 CWD=`pwd`
 
 build() {
-	ncurses_build
+	ncurses_build || exit 1
 	cd ${SRC}-${VER}
-	# /etc/nanoroc - nanorc
-	# /usr/share/nano/*.nanorc
-	opts="--prefix=/usr --sysconfdir=/etc --enable-tiny --enable-color --enable-nanorc"
+	sed -i 's/ac_cv_lib_ncurses6_refresh=no/ac_cv_lib_ncurses6_refresh=yes/' configure
+	opts="--prefix=/usr --sysconfdir=/etc --disable-unicode"
 	_configure
-	# https://lists.gnu.org/archive/html/help-nano/2013-01/msg00001.html
-	sed -i 's|.*HAVE_USE_DEFAULT_COLORS.*|#define HAVE_USE_DEFAULT_COLORS 1|' config.h
-	sed -i 's|.*GNU_WORDBOUNDS.*|#define GNU_WORDBOUNDS 1|' config.h
 	_make
-	abort_if_file_not_found src/$SRC
+	abort_if_file_not_found $SRC
 	install -d -m 0755 $CWD/${PKG}-${VER}-${ARCH}/bin
-	_install src/$SRC $CWD/${PKG}-${VER}-${ARCH}/bin
+	_install $SRC $CWD/${PKG}-${VER}-${ARCH}/bin
 	cd -
 	rm -rf ncurses*
 }
@@ -47,7 +43,6 @@ package() {
 ncurses_download
 retrieve ${SRC}-${VER}.${COMP}
 [ "$DLD_ONLY" = "yes" ] && exit
-rm -rf ${SRC}-${VER}
 extract ${SRC}-${VER}.${COMP}
 build
 package
