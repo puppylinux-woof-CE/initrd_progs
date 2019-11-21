@@ -19,9 +19,8 @@ X86_64_CC=cross-compiler-x86_64-20190805.tar.xz
 ARM_CC=cross-compiler-arm-20190805.tar.xz #armv6
 ARM64_CC=cross-compiler-aarch64-20190805.tar.xz
 
-INITRD_PROGS_STATIC=initrd_progs-20190714-static.tar.xz
-
-PREBUILT_BINARIES="${SITE}/${INITRD_PROGS_STATIC}"
+INITRD_STATIC='initrd_progs-20191121-static.tar.xz'
+PREBUILT_BINARIES="https://sourceforge.net/projects/wstuff/files/w/${INITRD_STATIC}"
 #aarch64_PREBUILT_BINARIES=
 #arm_PREBUILT_BINARIES=
 #i686_PREBUILT_BINARIES=
