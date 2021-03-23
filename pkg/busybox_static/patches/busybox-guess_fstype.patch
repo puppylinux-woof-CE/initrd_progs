@@ -20,7 +20,7 @@ diff -Nur bb-orig/util-linux/guess_fstype.c busybox-git/util-linux/guess_fstype.
 +//config:	default n
 +//config:	help
 +//config:	  Guess filesystem type of device.
-+//config:	  (As in Puppy guess_fstype)
++//config:	  (As in PLinux guess_fstype)
 +
 +//usage:#define guess_fstype_trivial_usage
 +//usage:	"[BLOCKDEV]..."

@@ -11,6 +11,8 @@
 # Versions:
 ncurses_ver=6.1    #2018-01-27
 libuuid_ver=1.0.3
+util_linux_ver=2.36.2
+util_linux_ver2=$(echo $util_linux_ver | cut -f 1,2 -d '.')
 
 #==========================================================
 #                        NCURSES
@@ -91,10 +93,8 @@ libuuid_build() {
 #                      UTIL-LINUX
 #==========================================================
 
-util_linux_ver=2.34
-
 util_linux_download() {
-	retrieve https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v${util_linux_ver}/util-linux-${util_linux_ver}.tar.xz
+	retrieve https://mirrors.edge.kernel.org/pub/linux/utils/util-linux/v${util_linux_ver2}/util-linux-${util_linux_ver}.tar.xz
 }
 
 util_linux_build() {
