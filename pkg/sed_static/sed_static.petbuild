@@ -1,6 +1,5 @@
 #!/bin/sh
 # sed_static
-# Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../../func
 
@@ -9,7 +8,7 @@
 URL=http://ftp.gnu.org/gnu/sed
 SRC=sed
 PKG=sed_static
-VER=4.7 #2018-12-21
+VER=4.8 #2020-01-14
 COMP=tar.xz
 DESC=""
 DEPS=
@@ -24,7 +23,6 @@ build() {
 --disable-acl
 --disable-i18n
 --without-selinux"
-	sed -i -e 's|armv\[2345\]|armv[234567]|' -e 's|armv\[345\]|armv[34567]|' build-aux/config.sub
 	_configure
 	_make ${MKFLG} LDFLAGS=-static
 	abort_if_file_not_found $EXE

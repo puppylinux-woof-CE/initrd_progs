@@ -1,6 +1,5 @@
 #!/bin/sh
 # grep_static
-# Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../../func
 

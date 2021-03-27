@@ -1,12 +1,11 @@
 #!/bin/sh
 # e2fsprogs_static
-# Builds from https://github.com/puppylinux-woof-CE/petbuilds
 
 . ../../func
 
 # GOES TO INITRD
 
-VER=1.45.4 # 23-sep-2019
+VER=1.46.2 # 2021-03-01
 #URL=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v${VER}
 URL=https://sourceforge.net/projects/e2fsprogs/files/e2fsprogs/v${VER}
 SRC=e2fsprogs
@@ -45,6 +44,14 @@ build() {
 	export CFLAGS=$(_cflags)
 	_configure
 	sed -i -e 's|.so$|.a|' -e 's|.so |.a |' $(find . -type f -name Makefile)
+	# problem with util/subst.c .. it's executed
+	# need to compile a working exe
+	#   Error relocating ./util/subst: __gettimeofday_time64: symbol not found
+	#   Error relocating ./util/subst: __fstat_time64: symbol not found
+	#   Error relocating ./util/subst: __futimes_time64: symbol not found
+	#   Makefile:288: recipe for target 'lib/dirpaths.h' failed
+	gcc -o util/subst util/subst.c
+	# --
 	_make ${MKFLG} LDFLAGS=-static
 	EXEC_E2=`find . -type f -name 'e2fsck'`
 	EXEC_RS=`find . -type f -name 'resize2fs'`

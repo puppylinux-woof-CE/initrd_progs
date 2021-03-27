@@ -7,7 +7,7 @@
 URL=https://www.kernel.org/pub/linux/utils/kernel/kmod
 SRC=kmod
 PKG=kmod_static
-VER=26 # 07-Feb-2019
+VER=28 # 07-Jan-2021
 COMP=tar.xz
 DESC=""
 DEPS=

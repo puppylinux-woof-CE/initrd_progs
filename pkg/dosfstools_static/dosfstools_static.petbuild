@@ -3,7 +3,7 @@
 
 . ../../func
 
-VER=4.1
+VER=4.2
 URL=https://github.com/dosfstools/dosfstools/releases/download/v${VER}
 SRC=dosfstools
 PKG=dosfstools_static
@@ -16,7 +16,7 @@ CWD=`pwd`
 build() {
 	cd ${SRC}-${VER}
 	EXE=dosfstools
-	opts="--prefix=/usr --without-udev"
+	opts="--prefix=/usr"
 	_configure
 	_make ${MKFLG} LDFLAGS=-static
 	abort_if_file_not_found src/fsck.fat

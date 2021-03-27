@@ -16,7 +16,7 @@ CAT=BuildingBlock
 CWD=`pwd`
 
 libuuid_ver=1.0.3  #2014-08-12
-popt_ver=1.16      #May 07 2010
+popt_ver=1.18      #2020-06-23
 #lvm2_ver=2.02.116 #Jan 30 2015
 #lvm2_ver=2.02.162 #Jul 28 2016
 lvm2_ver=2.02.168  #Nov 30 2016
@@ -43,8 +43,6 @@ build_libuuid() {
 
 build_popt() {
 	extract popt-${popt_ver}.tar.gz
-	# popt has a very old config.sub
-	cp -f ../config.sub popt-${popt_ver}
 	cd popt-${popt_ver}
 	opts="--prefix=$deps_dir"
 	_configure
@@ -88,9 +86,9 @@ build_libgpg_error() {
 	extract libgpg-error-${gpg_error_ver}.tar.bz2
 	cd libgpg-error-${gpg_error_ver}
 	case $ARCH in
-		i?86) SF='lock-obj-pub.i686-pc-linux-gnu.h' ;;
-		x86_64) SF='lock-obj-pub.x86_64-pc-linux-musl.h' ;;
-		arm*) SF='lock-obj-pub.armv6-unknown-linux-musleabihf.h' ;;
+		i?86)    SF='lock-obj-pub.i686-pc-linux-gnu.h' ;;
+		x86_64)  SF='lock-obj-pub.x86_64-pc-linux-musl.h' ;;
+		arm*)    SF='lock-obj-pub.armv6-unknown-linux-musleabihf.h' ;;
 		aarch64) SF='lock-obj-pub.aarch64-unknown-linux-gnu.h' ;;
 	esac
 	if [ -f src/syscfg/$SF ] ; then
@@ -191,8 +189,8 @@ package() {
 
 # main
 retrieve https://sourceforge.net/projects/libuuid/files/libuuid-${libuuid_ver}.tar.gz
-retrieve ftp://sources.redhat.com/pub/lvm2/LVM2.${lvm2_ver}.tgz
-retrieve http://rpm5.org/files/popt/popt-${popt_ver}.tar.gz
+retrieve https://ftp.osuosl.org/pub/blfs/conglomeration/lvm2/LVM2.${lvm2_ver}.tgz
+retrieve http://ftp.rpm.org/popt/releases/popt-1.x/popt-${popt_ver}.tar.gz
 retrieve ftp://ftp.gnupg.org/gcrypt/libgpg-error/libgpg-error-${gpg_error_ver}.tar.bz2
 retrieve ftp://ftp.gnupg.org/gcrypt/libgcrypt/libgcrypt-${gcrypt_ver}.tar.gz
 retrieve "${SRC}-${VER}.${COMP}"

@@ -12,15 +12,15 @@ export TARGET_TRIPLET=
 
 ARCH_LIST="i686 x86_64 arm aarch64"
 
-SITE=http://01micko.com/wdlkmpx/woof-CE
+SITE=http://musl.cc
 
-X86_CC=cross-compiler-i686-20190805.tar.xz
-X86_64_CC=cross-compiler-x86_64-20190805.tar.xz
-ARM_CC=cross-compiler-arm-20190805.tar.xz #armv6
-ARM64_CC=cross-compiler-aarch64-20190805.tar.xz
+X86_CC=i686-linux-musl-cross.tgz
+X86_64_CC=x86_64-linux-musl-cross.tgz
+ARM_CC=armv6-linux-musleabihf-cross.tgz #armv6
+ARM64_CC=aarch64-linux-musl-cross.tgz
 
 INITRD_STATIC='initrd_progs-20191121-static.tar.xz'
-PREBUILT_BINARIES="https://sourceforge.net/projects/wstuff/files/w/${INITRD_STATIC}"
+PREBUILT_BINARIES="no prebuilt binaries"
 #aarch64_PREBUILT_BINARIES=
 #arm_PREBUILT_BINARIES=
 #i686_PREBUILT_BINARIES=
@@ -28,7 +28,7 @@ PREBUILT_BINARIES="https://sourceforge.net/projects/wstuff/files/w/${INITRD_STAT
 
 TARGET_TRIPLET_x86="i686-linux-musl"
 TARGET_TRIPLET_x86_64="x86_64-linux-musl"
-TARGET_TRIPLET_arm="arm-linux-musleabihf" #arm v6
+TARGET_TRIPLET_arm="armv6-linux-musleabihf"
 TARGET_TRIPLET_arm64="aarch64-linux-musl"
 
 ARCH=`uname -m`
@@ -138,7 +138,7 @@ while [ "$1" ] ; do
 	-h|-help|--help) help_msg ; exit ;;
 		-clean)
 			echo -e "Press P and hit enter to proceed, any other combination to cancel.." ; read zz
-			case $zz in p|P) echo rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources cross-compiler* ;; esac
+			case $zz in p|P) echo rm -rf initrd.[gx]z initrd_progs-*.tar.* ZZ_initrd-expanded 00_* 0sources *-linux-musl* cross-compiler* ;; esac
 			exit
 			;;
 		*)
@@ -154,7 +154,8 @@ fi
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-function use_prebuilt_binaries() {
+function use_prebuilt_binaries()
+{
 	[ ! "$PREBUILT_BINARIES" ] && exit_error "No prebuilt binaries"
 	case "$TARGET_ARCH" in
 		i686)    [ -n "$i686_PREBUILT_BINARIES" ]    && PREBUILT_BINARIES=${i686_PREBUILT_BINARIES} ;;
@@ -184,7 +185,8 @@ function use_prebuilt_binaries() {
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-function select_target_arch() {
+function select_target_arch()
+{
 	[ "$CROSS_COMPILE" = "no" -a "$USE_PREBUILT" = "no" ] && return
 	[ "$USE_SYS_GCC" = "yes" ] && return
 	if ! [ "$TARGET_ARCH" ] ; then
@@ -213,34 +215,25 @@ function select_target_arch() {
 	fi
 	# using prebuilt binaries: echo $ARCH and return
 	[ "$USE_PREBUILT" = "yes" ] && echo "Arch: $ARCH" && return
-	# don't check OS_ARCH if only downloading
-	if [ "$DLD_ONLY" = "no" ] ; then
-		case $OS_ARCH in
-			*64) ok=yes ;;
-			*) case $ARCH in *64) fatal_error "\n*** Trying to compile for a 64bit arch in a 32bit system?\n*** That's not possible.. exiting.." ;; esac ;;
-		esac
-	fi
 	#--
 	case $ARCH in
-		i*86)    CC_TARBALL=$X86_CC    ;;
-		x86_64)  CC_TARBALL=$X86_64_CC ;;
-		arm*)    CC_TARBALL=$ARM_CC    ;;
-		aarch64) CC_TARBALL=$ARM64_CC  ;;
+		i*86)    CC_TARBALL=$X86_CC    ; TARGET_TRIPLET=${TARGET_TRIPLET_x86} ;;
+		x86_64)  CC_TARBALL=$X86_64_CC ; TARGET_TRIPLET=${TARGET_TRIPLET_x86_64} ;;
+		arm*)    CC_TARBALL=$ARM_CC    ; TARGET_TRIPLET=${TARGET_TRIPLET_arm} ;;
+		aarch64) CC_TARBALL=$ARM64_CC  ; TARGET_TRIPLET=${TARGET_TRIPLET_arm64} ;;
 	esac
 	if [ -z "$CC_TARBALL" ] ; then
 		exit_error "Cross compiler for $TARGET_ARCH is not available at the moment..."
 	fi
 	#--
 	echo "Arch: $ARCH"
-	TARGET_TRIPLET=$(echo $CC_TARBALL | cut -d '-' -f 3)
-	TARGET_TRIPLET=${TARGET_TRIPLET}-linux-musl
-	case $ARCH in arm*) TARGET_TRIPLET=${TARGET_TRIPLET_arm} ;; esac # deja vu
 	sleep 1.5
 }
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-function set_gcc() {
+function set_gcc()
+{
 	if ! which make &>/dev/null ; then
 		fatal_error echo "It looks like development tools are not installed.. stopping"
 	fi
@@ -258,9 +251,11 @@ function set_gcc() {
 	fi
 }
 
-function setup_cross_compiler() {
+
+function setup_cross_compiler()
+{
 	[ "$CROSS_COMPILE" = "no" ] && return
-	CC_DIR=cross-compiler-${ARCH}
+	CC_DIR=$(echo ${CC_TARBALL} | cut -f 1 -d '.')
 	echo
 	## download
 	if [ ! -f "0sources/${CC_TARBALL}" ];then
@@ -272,7 +267,9 @@ function setup_cross_compiler() {
 			exit_error "failed to download ${CC_TARBALL}"
 		fi
 	else
-		[ "$DLD_ONLY" = "yes" ] && echo "Already downloaded ${CC_TARBALL}"
+		if [ "$DLD_ONLY" = "yes" ] ; then
+			echo "Already downloaded ${CC_TARBALL}"
+		fi
 	fi
 	[ "$DLD_ONLY" = "yes" ] && return
 	## extract
@@ -306,7 +303,8 @@ function setup_cross_compiler() {
 
 #--------------
 
-function check_bin() {
+function check_bin()
+{
 	case $init_pkg in
 		""|'#'*) continue ;;
 		coreutils_static) static_bins='cp' ;;
@@ -320,11 +318,15 @@ function check_bin() {
 		*) static_bins=${init_pkg%_*} ;;
 	esac
 	for sbin in ${static_bins} ; do
-		[ -f ./00_${ARCH}/bin/${sbin} ] || return 1
+		if ! [ -f ./00_${ARCH}/bin/${sbin} ] ; then
+			return 1
+		fi
 	done
 }
 
-function build_pkgs() {
+
+function build_pkgs()
+{
 	rm -f .fatal
 	mkdir -p 00_${ARCH}/bin 00_${ARCH}/log 0sources
 	if [ "$DLD_ONLY" = "no" ] ; then
@@ -341,13 +343,16 @@ function build_pkgs() {
 		PACKAGES=$(get_initrd_progs -pkg $ARCH)
 	fi
 	#--
-	for init_pkg in ${PACKAGES} ; do
+	for init_pkg in ${PACKAGES}
+	do
 		case $init_pkg in ""|'#'*) continue ;; esac
 		if [ -f .fatal ] ; then
 			rm -f .fatal_error
 			exit_error "Exiting.."
 		fi
-		[ -d pkg/"${init_pkg}_static" ] && init_pkg=${init_pkg}_static
+		if [ -d pkg/"${init_pkg}_static" ] ; then
+			init_pkg=${init_pkg}_static
+		fi
 		if [ "$DLD_ONLY" = "no" -a ! "$CREATE_PET" ] ; then
 			check_bin $init_pkg
 			[ $? -eq 0 ] && { echo "$init_pkg exists ... skipping" ; continue ; }
@@ -370,7 +375,9 @@ function build_pkgs() {
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-function generate_initrd() {
+
+function generate_initrd()
+{
 	[ "$CREATE_PET" ] && return
 	[ "$DLD_ONLY" = "yes" ] && return
 	[ "$INITRD_CREATE" = "no" ] && return
