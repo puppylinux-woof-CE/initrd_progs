@@ -9,6 +9,10 @@
  * musl-gcc -static -O3 -fomit-frame-pointer -ffunction-sections -fdata-sections -fmerge-all-constants -Wl,--sort-common -Wl,-gc-sections -o debdb2pupdb debdb2pupdb.c
  * strip --strip-all -R .note -R .comment debdb2pupdb
  *
+ * or:
+ * docker run --rm -v `pwd`:/tmp/v -w /tmp/v ghcr.io/dimkr/containers/c-dev:latest sh -c ". /opt/x-tools/i386-any32-linux-musl/activate && i386-any32-linux-musl-gcc $CFLAGS pkg/w_apps_static/w_apps/debdb2pupdb.c -o debdb2pupdb-i386 $LDFLAGS && i386-any32-linux-musl-strip -s -R .note -R .comment debdb2pupdb-i386"
+ * docker run --rm -v `pwd`:/tmp/v -w /tmp/v ghcr.io/dimkr/containers/c-dev:latest sh -c ". /opt/x-tools/arm-any32-linux-musleabi/activate && arm-any32-linux-musleabi-gcc $CFLAGS pkg/w_apps_static/w_apps/debdb2pupdb.c -o debdb2pupdb-arm $LDFLAGS -lc && arm-any32-linux-musleabi-strip -s -R .note -R .comment debdb2pupdb-arm"
+ *
  * cheers,
  * iguleder, September 2015
  *
@@ -64,6 +68,7 @@ enum fields {
 	FIELD_DEPS,
 	FIELD_WWW,
 	FIELD_SECT,
+	FIELD_PREDEPS,
 	FIELD_MAX
 };
 
@@ -76,7 +81,8 @@ static const char *fields_str[] = {
 	"Version",
 	"Depends",
 	"Homepage",
-	"Section"
+	"Section",
+	"Pre-Depends"
 };
 
 // =======================================================
@@ -182,7 +188,7 @@ int main(int argc, char *argv[])
 	FILE *db;
 	unsigned long *pkgs, *baddeps;
 	FILE *baddepf, *wwwf;
-	int len, i, ndeps, npkgs, nbaddeps;
+	int len, i, ndeps, npkgs, nbaddeps, deploops;
 
 	/* Trisquel has some packages with the "ubuntu" suffix, so we have to search
 	 * for both */
@@ -334,82 +340,83 @@ print:
 
 		if (fields[FIELD_DEPS] != NULL) {
 			ndeps = 0;
-			dep = fields[FIELD_DEPS];
 
-			do {
-				pos = strstr(dep, ", ");
-				if (pos != NULL) pos[0] = '\0';
+			for (deploops = 0, dep = fields[FIELD_PREDEPS]; deploops < 2; ++deploops, dep = fields[FIELD_DEPS]) {
+				do {
+					pos = strstr(dep, ", ");
+					if (pos != NULL) pos[0] = '\0';
 
-				sep = strstr(dep, " (");
-				/* special case, in case there's an OR relationship between
-				 * dependencies 0setup replaces the | character with a space */
-				if (sep == NULL)
-					sep = strchr(dep, ' ');
-				else
-					strchr(sep + 2, ')')[0] = '\0';
-				if (sep != NULL) sep[0] = '\0';
+					sep = strstr(dep, " (");
+					/* special case, in case there's an OR relationship between
+					* dependencies 0setup replaces the | character with a space */
+					if (sep == NULL)
+						sep = strchr(dep, ' ');
+					else
+						strchr(sep + 2, ')')[0] = '\0';
+					if (sep != NULL) sep[0] = '\0';
 
-				depcrc = crc32(initcrc, (unsigned char *) dep, strlen(dep));
+					depcrc = crc32(initcrc, (unsigned char *) dep, strlen(dep));
 
-				/* if the package is an invalid dependency, skip it */
-				for (i = 0; i < nbaddeps; ++i)
-					if (depcrc == baddeps[i]) goto nextdep;
+					/* if the package is an invalid dependency, skip it */
+					for (i = 0; i < nbaddeps; ++i)
+						if (depcrc == baddeps[i]) goto nextdep;
 
-				/* check whether the package exists */
-				if (npkgs > 0) {
-					for (i = 0; i < npkgs; ++i)
-						if (depcrc == pkgs[i]) goto parse_deps;
+					/* check whether the package exists */
+					if (npkgs > 0) {
+						for (i = 0; i < npkgs; ++i)
+							if (depcrc == pkgs[i]) goto parse_deps;
 
-					/* if not - add it to the list of bad dependencies */
-					if (baddepf != NULL) {
-						fputs(dep, baddepf);
-						fputc('\n', baddepf);
+						/* if not - add it to the list of bad dependencies */
+						if (baddepf != NULL) {
+							fputs(dep, baddepf);
+							fputc('\n', baddepf);
+						}
+						goto nextdep;
 					}
-					goto nextdep;
-				}
 
 /* parse_deps */
 parse_deps:
-				deprel = NULL;
-				if (sep != NULL) {
-					sep += 2;
-					if (sep[0] == '>') {
-						if (sep[1] == '=') {
-							trim_ver(sep + 3, &preg, &depver, NULL);
-							deprel = "&ge";
-						} else if (sep[1] == '>') {
-							trim_ver(sep + 3, &preg, &depver, NULL);
-							deprel = "&gt";
-						} else deprel = NULL;
-					} else if (sep[0] == '<') {
-						if (sep[1] == '=') {
-							trim_ver(sep + 3, &preg, &depver, NULL);
-							deprel = "&le";
+					deprel = NULL;
+					if (sep != NULL) {
+						sep += 2;
+						if (sep[0] == '>') {
+							if (sep[1] == '=') {
+								trim_ver(sep + 3, &preg, &depver, NULL);
+								deprel = "&ge";
+							} else if (sep[1] == '>') {
+								trim_ver(sep + 3, &preg, &depver, NULL);
+								deprel = "&gt";
+							} else deprel = NULL;
+						} else if (sep[0] == '<') {
+							if (sep[1] == '=') {
+								trim_ver(sep + 3, &preg, &depver, NULL);
+								deprel = "&le";
+							}
+						} else if (sep[0] == '=') {
+							trim_ver(sep + 2, &preg, &depver, NULL);
+							deprel = "&eq";
 						}
-					} else if (sep[0] == '=') {
-						trim_ver(sep + 2, &preg, &depver, NULL);
-						deprel = "&eq";
+						sep[0] = '\0';
 					}
-					sep[0] = '\0';
-				}
 
-				++ndeps;
-				if (ndeps > 1)
-					fwrite(",+", 1, 2, stdout);
-				else
-					putc('+', stdout);
+					++ndeps;
+					if (ndeps > 1)
+						fwrite(",+", 1, 2, stdout);
+					else
+						putc('+', stdout);
 
-				fputs(dep, stdout);
-				if (deprel != NULL) {
-					fputs(deprel, stdout);
-					fputs(depver, stdout);
-				}
+					fputs(dep, stdout);
+					if (deprel != NULL) {
+						fputs(deprel, stdout);
+						fputs(depver, stdout);
+					}
 
 /* nextdep */
 nextdep:
-				if (pos == NULL) break;
-				dep = pos + 2;
-			} while (1);
+					if (pos == NULL) break;
+					dep = pos + 2;
+				} while (1);
+			}
 		}
 
 		putc('|', stdout);
