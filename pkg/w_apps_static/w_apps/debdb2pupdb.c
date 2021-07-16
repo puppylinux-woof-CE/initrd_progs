@@ -10,6 +10,7 @@
  * strip --strip-all -R .note -R .comment debdb2pupdb
  *
  * or:
+ * docker run --rm -v `pwd`:/tmp/v -w /tmp/v ghcr.io/dimkr/containers/c-dev:latest sh -c ". /opt/x-tools/x86_64-any64-linux-musl/activate && x86_64-any64-linux-musl-gcc $CFLAGS pkg/w_apps_static/w_apps/debdb2pupdb.c -o debdb2pupdb-x86_64 $LDFLAGS && x86_64-any64-linux-musl-strip -s -R .note -R .comment debdb2pupdb-x86_64"
  * docker run --rm -v `pwd`:/tmp/v -w /tmp/v ghcr.io/dimkr/containers/c-dev:latest sh -c ". /opt/x-tools/i386-any32-linux-musl/activate && i386-any32-linux-musl-gcc $CFLAGS pkg/w_apps_static/w_apps/debdb2pupdb.c -o debdb2pupdb-i386 $LDFLAGS && i386-any32-linux-musl-strip -s -R .note -R .comment debdb2pupdb-i386"
  * docker run --rm -v `pwd`:/tmp/v -w /tmp/v ghcr.io/dimkr/containers/c-dev:latest sh -c ". /opt/x-tools/arm-any32-linux-musleabi/activate && arm-any32-linux-musleabi-gcc $CFLAGS pkg/w_apps_static/w_apps/debdb2pupdb.c -o debdb2pupdb-arm $LDFLAGS -lc && arm-any32-linux-musleabi-strip -s -R .note -R .comment debdb2pupdb-arm"
  *
