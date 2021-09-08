@@ -31,7 +31,7 @@
 #include <unistd.h>
 
 #define BUF_SIZE (1536 * 1536)
-#define MAX_PKGS (100000)
+#define MAX_PKGS (200000)
 #define VAL_SIZE (16 * 1024)
 #define REV_SIZE (32)
 
@@ -164,9 +164,17 @@ static unsigned long *list_pkgs(const char *path,
 	len = read(fd, buf, BUF_SIZE);
 	close(fd);
 
+	if (len <= 0)
+		return pkgs;
+
 	buf[len] = '\0';
 
 	for (curr = buf; curr != NULL; ++*out) {
+		if (*out == MAX_PKGS) {
+			fputs("Too many packages", stderr);
+			exit(EXIT_FAILURE);
+		}
+
 		next = strchr(curr + 1, ' ');
 		if (next != NULL) next[0] = '\0';
 		++curr;
