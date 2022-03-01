@@ -1,0 +1,38 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup
+        run: |
+          echo "dash dash/sh boolean false" | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
+      - name: build.sh
+        run: ./build.sh tarball
+      - name: Get version
+        id: get_version
+        run: echo "::set-output name=version::$(date "+%Y%m%d")"
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+      - name: Upload tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: initrd_progs-${{ steps.get_version.outputs.version }}-static.tar.xz
+          asset_name: initrd_progs-static.tar.xz
+          asset_content_type: application/x-xz-compressed-tar
