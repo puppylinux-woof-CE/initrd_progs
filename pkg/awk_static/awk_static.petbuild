@@ -5,7 +5,7 @@
 
 # GOES TO INITRD
 
-URL=http://ftp.gnu.org/gnu/gawk
+URL=https://ftp.gnu.org/gnu/gawk
 SRC=gawk
 PKG=awk_static
 VER=4.2.1 #latest is 5.0.1 -- error compiling

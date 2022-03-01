@@ -5,7 +5,7 @@
 
 # GOES TO INITRD
 
-URL=http://ftp.gnu.org/gnu/grep
+URL=https://ftp.gnu.org/gnu/grep
 SRC=grep
 PKG=grep_static
 VER=3.1

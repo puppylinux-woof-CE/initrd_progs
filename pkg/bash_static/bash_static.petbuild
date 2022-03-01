@@ -3,7 +3,7 @@
 
 . ../../func
 
-URL=http://ftp.gnu.org/gnu/bash
+URL=https://ftp.gnu.org/gnu/bash
 SRC=bash
 PKG=bash_static
 VER=5.1

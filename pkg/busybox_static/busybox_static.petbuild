@@ -24,7 +24,7 @@ fi
 
 . ../../func
 
-URL=http://busybox.net/downloads
+URL=https://busybox.net/downloads
 PKG=busybox_static
 SRC=busybox
 VER=1.33.0
