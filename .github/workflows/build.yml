@@ -1,0 +1,18 @@
+name: build
+
+on:
+  schedule:
+    - cron: '0 0 2 * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup
+        run: |
+          echo "dash dash/sh boolean false" | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
+      - name: build.sh
+        run: ./build.sh tarball
