@@ -37,6 +37,7 @@ build() {
 	cd ${SRC}-${VER}
 	#export FUSE_LIBS=${libfuse_dir}/lib/libfuse3.a
 	export FUSE_LIBS=${libfuse_dir}/lib/libfuse.a
+	export PKG_CONFIG_PATH=${libfuse_dir}/lib/pkgconfig
 	opts="--prefix=/usr"
 	_configure
 	_make ${MKFLG} LDFLAGS=-static
