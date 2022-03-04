@@ -20,7 +20,7 @@ popt_ver=1.18      #2020-06-23
 #lvm2_ver=2.02.116 #Jan 30 2015
 #lvm2_ver=2.02.162 #Jul 28 2016
 lvm2_ver=2.02.168  #Nov 30 2016
-gpg_error_ver=1.24 #Jul 14 2016
+gpg_error_ver=1.44 #Jan 27 2022
 gcrypt_ver=1.7.2   #Jul 14 2016
 
 #-----------------------

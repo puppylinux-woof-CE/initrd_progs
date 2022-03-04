@@ -211,9 +211,10 @@ function _install() {
 	fi
 	chmod +x "$file"
 	cp "$file" "$dest"
-	file $file | grep -E 'dynamically|shared' && {
+	file $file | grep -v 'pie executable' | grep -E 'dynamically|shared' && {
 		echo "$file is not static..!"
-		exit_error 1
+		# bullseye says busybox is an 'ELF 32-bit LSB pie executable', focal says it's an 'ELF 32-bit LSB shared object'
+		[ -z "$GITHUB_ACTIONS" ] && exit_error 1
 	}
 }
 

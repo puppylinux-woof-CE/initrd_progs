@@ -17,6 +17,7 @@ CWD=`pwd`
 
 build() {
 	cd ${SRC}-${VER}
+	sed 's~#include <stdint.h>~&\n#include <sys/sysmacros.h>~' -i gl/lib/mountlist.c
 	opts='--prefix=/usr --disable-nls --without-selinux --enable-dependency-tracking'
 	_configure
 	_make ${MKFLG} LDFLAGS=-static
