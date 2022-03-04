@@ -3,7 +3,7 @@
 . ../../func
 . ../libs.sh # ncurses
 
-URL=http://triptico.com/download
+URL=https://triptico.com/download
 SRC=mp
 PKG=mp_static
 VER=3.3.18b       #old, but my favorite.

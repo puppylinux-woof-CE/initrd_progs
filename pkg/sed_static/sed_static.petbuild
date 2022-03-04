@@ -5,7 +5,7 @@
 
 # GOES TO INITRD
 
-URL=http://ftp.gnu.org/gnu/sed
+URL=https://ftp.gnu.org/gnu/sed
 SRC=sed
 PKG=sed_static
 VER=4.8 #2020-01-14
