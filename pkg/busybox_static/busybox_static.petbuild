@@ -27,7 +27,7 @@ fi
 URL=https://busybox.net/downloads
 PKG=busybox_static
 SRC=busybox
-VER=1.35.0
+VER=1.36.0
 REV=1
 COMP=tar.bz2
 DESC="BusyBox - The Swiss Army Knife of Embedded Linux - statically built"
