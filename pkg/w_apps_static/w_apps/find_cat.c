@@ -113,9 +113,9 @@ int main(int argc, char *argv[])
 	setvbuf(stdout, outbuf, BUF_SIZE, _IOFBF);
 
 	buf = malloc(BUF_SIZE);
-	catf = fopen("/usr/local/petget/categories.dat", "r");
-	if (NULL == catf) // local copy if system-wide is not found
 	catf = fopen("./rootfs-skeleton/usr/local/petget/categories.dat", "r");
+	if (NULL == catf) // system-wide if local is not found
+	catf = fopen("/usr/local/petget/categories.dat", "r");
 	if (NULL == catf) goto bail;
 
 	initcrc = crc32(0, NULL, 0);
