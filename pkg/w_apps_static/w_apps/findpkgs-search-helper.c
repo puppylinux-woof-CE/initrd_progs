@@ -56,20 +56,18 @@ struct single_list_item_struct
 	struct single_list_item_struct *next;
 };
 
-/* A structure with two unions to implement named linked lists,
- * the entries in /tmp/findpkgs_tmp/FINAL_PKGS and
+/* A structure with two unions to implement named linked lists
+ * and the entries in /tmp/findpkgs_tmp/FINAL_PKGS
  */
 struct double_list_item_struct
 {
 	union
 	{
-		char *distro;
 		char *list_name;
 		struct final_pkgs_extra_fields_struct *extra_fields;
 	};
 	union
 	{
-		char *release;
 		struct single_list_item_struct *list_item;
 		struct pkglist_entry_struct *pkglist_entry;
 	};
@@ -941,7 +939,6 @@ int search_func(int search_nr)
 			root_item_x_found_specs = NULL;
 			current_item_x_found_specs = &root_item_x_found_specs;
 
-			//x
 			// for PKGLIST in $xPACKAGELISTS_ORDER
 			one_x_package_list = root_item_x_package_lists_order;
 			while (one_x_package_list != NULL)
@@ -1473,11 +1470,6 @@ int main(int argc, char **argv)
 
 	char *pkgs_specs_table_buffer = NULL;
 
-	char *petcompiled_ptns_buffef = NULL;
-	char *petcompiled_ptns_pointer = NULL;
-	char *ptn_pointer = NULL;
-	struct double_list_item_struct **current_item_petcompiled_ptns = NULL;
-
 	char *debug_buffer = NULL;
 	char *debug_pointer = NULL;
 
@@ -1660,13 +1652,6 @@ int main(int argc, char **argv)
 					printf("Error: Missing argument to --pkgs-specs-table\n");
 					return 1;
 				}
-			}
-		}
-		else if (strncmp("--petcompiledPTNS", argv[i], 17) == 0)
-		{
-			if (strncmp("--petcompiledPTNS=", argv[i], 18) == 0) {
-			} else {
-				i++;
 			}
 		}
 		else if (strcmp("--verbose", argv[i]) == 0
