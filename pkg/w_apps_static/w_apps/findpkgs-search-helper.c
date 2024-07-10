@@ -909,7 +909,8 @@ int search_func(int search_nr)
 			}
 
 			// set dev_name (devnamePTN)
-			snprintf(dev_name, sizeof(dev_name), one_x_binary_part_name, "_DEV");
+			snprintf(dev_name, sizeof(dev_name), "%s_DEV",
+				one_x_binary_part_name);
 
 			// if [ "$DEBUG" ] ; then
 			if (is_debug == 1)
@@ -1168,16 +1169,16 @@ int search_func(int search_nr)
 					} // end if (*pkg_location_field == '\0')
 
 					// set name_dev (devnamePTN)
-					snprintf(name_dev, sizeof(name_dev),
-						x_found_specs_pkglist->pkg_name_only, "_DEV");
+					snprintf(name_dev, sizeof(name_dev), "%s_DEV",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// set name_doc (docnamePTN)
-					snprintf(name_doc, sizeof(name_doc),
-						x_found_specs_pkglist->pkg_name_only, "_DOC");
+					snprintf(name_doc, sizeof(name_doc), "%s_DOC",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// set name_nls (nlsnamePTN)
-					snprintf(name_nls, sizeof(name_nls),
-						x_found_specs_pkglist->pkg_name_only, "_NLS");
+					snprintf(name_nls, sizeof(name_nls), "%s_NLS",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// find REPODBFILE
 
