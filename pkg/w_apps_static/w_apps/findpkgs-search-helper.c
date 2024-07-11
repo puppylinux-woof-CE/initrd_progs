@@ -670,7 +670,13 @@ int search_func(int search_nr)
 		{
 			generic_name = strsep(&one_pkg_spec_pointer, "|");
 			if (*generic_name == '\0')
+			{
+				if (one_pkg_spec_pointer != NULL)
+					printf("\n\nWarning: Skipping invalid line (missing GENERICNAME):\n%s||%s\n\n",
+						yes_no, one_pkg_spec_pointer);
+
 				goto next_pkg_spec;
+			}
 		}
 		else
 		{
@@ -787,6 +793,9 @@ int search_func(int search_nr)
 					pkg_loc1_pointer = "pet";
 				else
 					pkg_loc1_pointer = "compat";
+
+				printf("\n\nWarning: Invalid package location field (PKGLOCFLD) defaulting to %s:\n%s|%s|%s|...|%s\n\n",
+					pkg_loc1_pointer, yes_no, generic_name, binary_part_names, pkg_location_field);
 			}
 		}
 
