@@ -1664,6 +1664,13 @@ int main(int argc, char **argv)
 				}
 			}
 		}
+		else if (strncmp("--petcompiledPTNS", argv[i], 17) == 0)
+		{
+			if (strncmp("--petcompiledPTNS=", argv[i], 18) == 0) {
+			} else {
+				i++;
+			}
+		}
 		else if (strcmp("--verbose", argv[i]) == 0
 				|| strcmp("-v", argv[i]) == 0)
 		{
@@ -1718,7 +1725,6 @@ int main(int argc, char **argv)
 --packagelists-pet-order=\"$PACKAGELISTS_PET_ORDER\" \
 --pkglists-compat=\"$PKGLISTS_COMPAT\" \
 --pkgs-specs-table=\"$PKGS_SPECS_TABLE\" \
---petcompiledPTNS=\"$petcompiledPTNS\" \
 [-v | --verbose] [ --debug | --debug=<yes,1|no,0>] [<search num>]\n");
 		return 1;
 	}
