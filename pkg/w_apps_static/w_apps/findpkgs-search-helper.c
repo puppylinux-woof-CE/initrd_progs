@@ -56,20 +56,18 @@ struct single_list_item_struct
 	struct single_list_item_struct *next;
 };
 
-/* A structure with two unions to implement named linked lists,
- * the entries in /tmp/findpkgs_tmp/FINAL_PKGS and
+/* A structure with two unions to implement named linked lists
+ * and the entries in /tmp/findpkgs_tmp/FINAL_PKGS
  */
 struct double_list_item_struct
 {
 	union
 	{
-		char *distro;
 		char *list_name;
 		struct final_pkgs_extra_fields_struct *extra_fields;
 	};
 	union
 	{
-		char *release;
 		struct single_list_item_struct *list_item;
 		struct pkglist_entry_struct *pkglist_entry;
 	};
@@ -672,7 +670,13 @@ int search_func(int search_nr)
 		{
 			generic_name = strsep(&one_pkg_spec_pointer, "|");
 			if (*generic_name == '\0')
+			{
+				if (one_pkg_spec_pointer != NULL)
+					printf("\n\nWarning: Skipping invalid line (missing GENERICNAME):\n%s||%s\n\n",
+						yes_no, one_pkg_spec_pointer);
+
 				goto next_pkg_spec;
+			}
 		}
 		else
 		{
@@ -789,6 +793,9 @@ int search_func(int search_nr)
 					pkg_loc1_pointer = "pet";
 				else
 					pkg_loc1_pointer = "compat";
+
+				printf("\n\nWarning: Invalid package location field (PKGLOCFLD) defaulting to %s:\n%s|%s|%s|...|%s\n\n",
+					pkg_loc1_pointer, yes_no, generic_name, binary_part_names, pkg_location_field);
 			}
 		}
 
@@ -911,7 +918,8 @@ int search_func(int search_nr)
 			}
 
 			// set dev_name (devnamePTN)
-			snprintf(dev_name, sizeof(dev_name), one_x_binary_part_name, "_DEV");
+			snprintf(dev_name, sizeof(dev_name), "%s_DEV",
+				one_x_binary_part_name);
 
 			// if [ "$DEBUG" ] ; then
 			if (is_debug == 1)
@@ -941,7 +949,6 @@ int search_func(int search_nr)
 			root_item_x_found_specs = NULL;
 			current_item_x_found_specs = &root_item_x_found_specs;
 
-			//x
 			// for PKGLIST in $xPACKAGELISTS_ORDER
 			one_x_package_list = root_item_x_package_lists_order;
 			while (one_x_package_list != NULL)
@@ -1171,16 +1178,16 @@ int search_func(int search_nr)
 					} // end if (*pkg_location_field == '\0')
 
 					// set name_dev (devnamePTN)
-					snprintf(name_dev, sizeof(name_dev),
-						x_found_specs_pkglist->pkg_name_only, "_DEV");
+					snprintf(name_dev, sizeof(name_dev), "%s_DEV",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// set name_doc (docnamePTN)
-					snprintf(name_doc, sizeof(name_doc),
-						x_found_specs_pkglist->pkg_name_only, "_DOC");
+					snprintf(name_doc, sizeof(name_doc), "%s_DOC",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// set name_nls (nlsnamePTN)
-					snprintf(name_nls, sizeof(name_nls),
-						x_found_specs_pkglist->pkg_name_only, "_NLS");
+					snprintf(name_nls, sizeof(name_nls), "%s_NLS",
+						x_found_specs_pkglist->pkg_name_only);
 
 					// find REPODBFILE
 
@@ -1473,11 +1480,6 @@ int main(int argc, char **argv)
 
 	char *pkgs_specs_table_buffer = NULL;
 
-	char *petcompiled_ptns_buffef = NULL;
-	char *petcompiled_ptns_pointer = NULL;
-	char *ptn_pointer = NULL;
-	struct double_list_item_struct **current_item_petcompiled_ptns = NULL;
-
 	char *debug_buffer = NULL;
 	char *debug_pointer = NULL;
 
@@ -1723,7 +1725,6 @@ int main(int argc, char **argv)
 --packagelists-pet-order=\"$PACKAGELISTS_PET_ORDER\" \
 --pkglists-compat=\"$PKGLISTS_COMPAT\" \
 --pkgs-specs-table=\"$PKGS_SPECS_TABLE\" \
---petcompiledPTNS=\"$petcompiledPTNS\" \
 [-v | --verbose] [ --debug | --debug=<yes,1|no,0>] [<search num>]\n");
 		return 1;
 	}
