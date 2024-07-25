@@ -193,7 +193,7 @@ retrieve https://sourceforge.net/projects/libuuid/files/libuuid-${libuuid_ver}.t
 retrieve https://ftp.osuosl.org/pub/blfs/conglomeration/lvm2/LVM2.${lvm2_ver}.tgz
 retrieve http://ftp.rpm.org/popt/releases/popt-1.x/popt-${popt_ver}.tar.gz
 retrieve https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-${gpg_error_ver}.tar.bz2
-retrieve ftp://ftp.gnupg.org/gcrypt/libgcrypt/libgcrypt-${gcrypt_ver}.tar.gz
+retrieve https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-${gcrypt_ver}.tar.gz
 retrieve "${SRC}-${VER}.${COMP}"
 [ "$DLD_ONLY" = "yes" ] && exit
 extract ${SRC}-${VER}.${COMP}
